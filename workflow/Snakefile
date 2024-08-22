@@ -1,0 +1,38 @@
+from snakemake.utils import min_version
+min_version("7.0")
+
+rule all:
+    input:
+       "intermediate/master_sheet.csv"
+
+rule create_file_listing:
+    input:
+        dir='resources/adni/data/DNAm/'
+    output:
+        "intermediate/directory_content.txt"
+    shell:
+        """
+        ls -l {input.dir} > {output}
+        """
+
+rule targets: 
+    input:
+        idat=rules.create_file_listing.output, 
+        samples='resources/adni/data/DNAm/ADNI_DNA_Methylation_SampleAnnotation_20170530.xlsx'
+    output: 'intermediate/master_sheet.csv'
+    params:
+        idat = 'resources/adni/data/DNAm/'
+    singularity: 'docker://sjfandrews/dnam:v0.3'
+    script: 'scripts/targets.R'
+
+rule rgset: 
+    input: 
+        targets = rules.targets.output,
+        idat = 'resources/adni/data/DNAm/', 
+    output: 'intermediate/RGSet.RDS'
+    resources:
+        mem_mb = 2000,
+        time_min = 5
+    singularity: 'docker://sjfandrews/dnam:v0.3'
+    script: 'scripts/create_RGset.R'
+       

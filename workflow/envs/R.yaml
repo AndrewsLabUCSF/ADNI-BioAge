@@ -1,0 +1,42 @@
+name: r_dnam
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - r-base=4.3.3
+  - r-plyr=1.8.9
+  - r-dplyr=1.1.4
+  - r-tibble=3.2.1
+  - r-sm=2.2_5.7
+  - r-remotes=2.5.0
+  - r-readxl=1.4.2
+  - bioconductor-minfi=1.48.0
+  - bioconductor-lumi=2.54.0
+  - bioconductor-limma=3.58.1
+  - bioconductor-watermelon=2.8.0
+  # - bioconductor-dmrcate=2.12.0
+  # - bioconductor-DMRcatedata=2.12.0
+  - bioconductor-illuminahumanmethylationepicanno.ilm10b4.hg19=0.6.0
+  - bioconductor-illuminahumanmethylationepicmanifest=0.3.0
+  - bioconductor-summarizedexperiment=1.32.0
+  - bioconductor-epidish=2.18.0
+  - bioconductor-s4vectors=0.40.2
+
+# library(plyr)
+# library(dplyr)
+# library(tibble)
+# library(minfi)
+# library(lumi)
+# library(limma)
+# library(wateRmelon)
+# library(DMRcate)
+# library(DMRcatedata)
+# library(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
+# library(IlluminaHumanMethylationEPICmanifest)
+# library(SummarizedExperiment)
+# library(EpiDISH)
+# library(meffil)
+# library(S4Vectors)
+# library(sm) 
+ 
