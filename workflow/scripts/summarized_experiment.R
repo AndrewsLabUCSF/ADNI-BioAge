@@ -75,6 +75,18 @@ DNAm_calc_samples <- tibble(
 readr::write_csv(DNAm_calc_betas, 'intermediate/adni_DNAm_calc.csv')
 readr::write_csv(DNAm_calc_samples, 'intermediate/adni_DNAm_samples.csv')
 
+## Biolearn Metadata file 
+
+biolearn_meta <- DNAm_calc_samples %>%
+    select(id = Sample_Name, age = Age, sex = Sex, disease = Group) %>%
+    mutate(
+        sex = sex + 1, 
+        disease = ifelse(disease == "Control", 1, 2),
+    ) %>% 
+  filter(complete.cases(.))
+
+readr::write_csv(biolearn_meta, 'intermediate/adni_biolearn_metadata.csv')
+
 # To access elements in the SummarizedExperiment...
 # adni_se <- readRDS(file.path(proc_dir, "dasen_se.RDS"))
 # beta <- as.matrix(assays(adni_se)$DNAm)

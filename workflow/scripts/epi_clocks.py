@@ -16,7 +16,9 @@ df.set_index('ProbeID', inplace=True)
 df.index.name = 'id'
 
 # make dataset
-target_dataset = GeoData(metadata, df)
+ids_to_keep = metadata.index
+filtered_data = df[ids_to_keep]
+target_dataset = GeoData(metadata, filtered_data)
 
 # Load the reference dataset and compute averages for imputation
 reference_dataset = DataLibrary().get("GSE40279").load()
@@ -66,7 +68,7 @@ plot_data = pd.DataFrame({
 })
 
 ## Export 
-plot_data.to_csv("intermediate/adni_epiclocks.csv", sep=',', na_rep='', index=True)
+plot_data.to_csv("intermediate/adni_epiclocks_240826.csv", sep=',', na_rep='', index=True)
 
 # plot_data.index=plot_data['Age']
 

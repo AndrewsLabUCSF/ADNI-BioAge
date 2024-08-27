@@ -28,19 +28,20 @@ print(length(unique(targets$RID)))
 
 ## Remove technical duplicates 
 ## 200 duplicates in datasets; over 99% similar replicates, keep the first appearance; could also average or use batch numbers or scan dates
-message("identifying any technical replicates...")
-targets$RID_VISCODE <- paste0(targets$RID,"_",targets$VISCODE)
-targets$is_replicate <- duplicated(targets$RID_VISCODE)
+## Code was removing timepoints
+# message("identifying any technical replicates...")
+# targets$RID_VISCODE <- paste0(targets$RID,"_",targets$VISCODE)
+# targets$is_replicate <- duplicated(targets$RID_VISCODE)
 
-message("Removing replicates...")
-targets <- targets %>% filter(is_replicate == FALSE)
-message("Number of samples after removing duplicates...")
-print(length(unique(targets$RID)))
+# message("Removing replicates...")
+# targets <- targets %>% filter(is_replicate == FALSE)
+# message("Number of samples after removing duplicates...")
+# print(length(unique(targets$RID)))
 
-keep_samples <- targets %>% pull(barcodes)
-betaSet <- betaSet[, keep_samples]
-message("Samples with no replicates...")
-print(ncol(betaSet))
+# keep_samples <- targets %>% pull(barcodes)
+# betaSet <- betaSet[, keep_samples]
+# message("Samples with no replicates...")
+# print(ncol(betaSet))
 
 ## Remove samples with bisulfite < 85%
 ## Bisulfate converation rate is the sample quality or purity, if a cpg is unmetheated, sulfate 
