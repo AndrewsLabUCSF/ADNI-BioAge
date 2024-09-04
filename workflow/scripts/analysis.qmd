@@ -1,0 +1,324 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+
+setwd("~/gitcode/DNAm")
+
+```
+
+## Epigenetic Clos 
+
+- [Biolearn](https://bio-learn.github.io/clocks.html)
+
+### First Generation  
+
+Primarily estimate biological age based on DNA methylation patterns, aiming to predict chronological age
+
+- [Horvath 1](https://genomebiology.biomedcentral.com/articles/10.1186/gb-2013-14-10-r115): pan-tissue Horvath clock (353-CpG clock) using 8,000 samples encompassing 51 different tissueand cell types
+- [Horvathv 2](https://www.aging-us.com/article/101508/text): we developed a novel and highly robust DNAm age estimator (based on 391 CpGs) for human fibroblasts, keratinocytes, buccal cells, endothelial cells, lymphoblastoid cells, skin, blood, and saliva samples
+- [Hannum](https://www.sciencedirect.com/science/article/pii/S1097276512008933): 71- CpG clock using 656 whole-blood samples
+- [PedBE](https://www.pnas.org/doi/10.1073/pnas.1820843116): 94 CpG clock using 1,721 pediatric (0-20y) buccal epithelial cell samples
+- [Lin](https://www.aging-us.com/article/100908/text): 99 CpG clock predicting age using Lothian Birth Cohort
+
+### Second Generation 
+
+Second-generation clocks are designed to predict health outcomes, morbidity, and mortality more accurately, often incorporating additional clinical or phenotypic data alongside DNA methylation patterns.
+
+- [Zhang](https://www.nature.com/articles/ncomms14617): 10 CpG clock for mortality risk
+- [PhenoAge](): uses standard methods butpredicts a composite biological age score 31 based on alinear combination of chronological age and nine clini-cal parameters associated with mortality risk.
+- [GrimAge1](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6366976/): Seven DNAm-based estimators of plasma proteins including those of plasminogen activator inhibitor 1 (PAI-1) and growth differentiation factor 15. The resulting predictor of lifespan, DNAm GrimAge (in units of years), is a composite biomarker based on the seven DNAm surrogates and a DNAm-based estimator of smoking pack-years. Adjusting DNAm **GrimAge** for chronological age generated novel measure of epigenetic age acceleration, **AgeAccelGrim**.
+- [GrimAge2](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9792204/): Here we describe version 2 of GrimAge (trained on individuals aged between 40 and 92) which leverages two new DNAm based estimators of (log transformed) plasma proteins: high sensitivity C-reactive protein (logCRP) and hemoglobin A1C (logA1C). 13,399 blood samples across nine study cohorts.
+
+### Third Generation
+
+- [DunedinPoAm38](https://elifesciences.org/articles/54870): Dunedin Study members for whom age-38 DNA methylation data were available (N = 810). We applied elastic-net regression (Zou and Hastie, 2005) using Pace of Aging between ages 26 to 38 years as the criterion.
+- [DunedinPACE](https://elifesciences.org/articles/73420): Improved over PoAM38, longer follow-up, more time points. 
+- [CausAge](https://www.nature.com/articles/s43587-023-00557-0): epigenome-wide Mendelian randomization, we identified CpG sites potentially causal for aging-related traits. We established a new framework to introduce causal information into epigenetic clocks, resulting in **DamAge** and **AdaptAge**—clocks that track detrimental and adaptive methylation changes, respectively. DamAge correlates with adverse outcomes, including mortality, while AdaptAge is associated with beneficial adaptations.    
+
+## ADNI
+
+
+```{r}
+## Clinical
+merge.raw <- read_csv("resources/ADNI/ADNIMERGE_25Sep2023.csv")
+
+merge <- select(merge.raw, RID, PTID, COLPROT, ORIGPROT, VISCODE, EXAMDATE, EXAMDATE_bl, AGE, PTGENDER, PTEDUCAT, APOE4, 
+                DX_bl, DX, CDRSB, ADAS13,
+                FDG, PIB, AV45, FBB, ABETA, TAU, PTAU, ADAS13, Hippocampus, WholeBrain) %>%
+  arrange(RID, EXAMDATE) %>%
+  group_by(RID) %>%
+  mutate(
+    years_since_baseline = as.numeric(difftime(EXAMDATE, EXAMDATE_bl, units = "days")) / 365.25,
+    age = AGE + years_since_baseline
+  )
+  
+merge %>%
+  group_by(merge.raw, RID, PTID, COLPROT, ORIGPROT, VISCODE, EXAMDATE, DX_bl, CDRSB, AGE, APOE4, DX)
+```
+
+
+A total of 649 ADNI participants hadmethylation data. Participants varied on the number of repeatDNA methylation measurements they had: 83 had only abaseline measurement; 121 had 2 measurements (baseline plus 1repeat), mean 14.5 months between measurements (SD = 7.06);407 had 3 measurements, mean 12.1 months between mea-surements (SD = 1.5); 29 had 4, mean 10.4 months betweenmeasurements (SD = 3.54); and 9 had 5, mean 12.5 monthsbetween measurements (SD = 2.25). [Sugden et al 2022](https://www.neurology.org/doi/10.1212/WNL.0000000000200898)
+
+
+```{r}
+## Mythylation
+map.raw <- readxl::read_xlsx("resources/ADNI/ADNI_DNA_Methylation_SampleAnnotation_20170530.xlsx") %>%
+  mutate(Edate = as.Date(Edate))
+clocks.raw <- read_csv("intermediate/adni_epiclocks_240826.csv") %>%
+  rename(barcodes = '...1' ) 
+
+dnam.raw <- map.raw %>%
+  select(barcodes, RID, Phase,  Edate, DateDrawn, PlateNumber, Array) %>%
+  rename(Phase_methy = Phase,  Edate_methy = Edate, DateDrawn_methy = DateDrawn) %>%
+  arrange(RID, Edate_methy, PlateNumber) %>%
+  left_join(clocks.raw, by = 'barcodes') 
+
+dnam <- dnam.raw %>% 
+  group_by(RID, Edate_methy) %>%
+  distinct(RID, .keep_all = T) %>%
+  group_by(RID) %>%
+  slice(1:3)%>%
+  ungroup() %>%
+  select(-Age)
+
+```
+
+```{r}
+## Telomere Ration
+ts.raw <- read_csv("resources/ADNI/TS_RATIO_ADJ_23Aug2024.csv")
+
+ts <- ts.raw %>% 
+  arrange(RID, EXAM_DATE) %>%
+  group_by(RID, EXAM_DATE) %>%
+  distinct(RID, .keep_all = T) %>%
+  group_by(RID) %>%
+  slice(1:3) %>%
+  ungroup() 
+  
+```
+
+At what time point was WGS done? I think ADNI GO/2 when new blood was collected
+https://www.sciencedirect.com/science/article/pii/S1552526015001776 
+
+```{r}
+## Genetics 
+gen.raw <- read_csv("resources/ADNI/APOE_GENETIC_27Aug2024.csv") %>%
+  arrange(RID, VISDATE) 
+
+apoe_wgs.path <- "resources/ADNI/ADNI.808_indiv.minGQ_21.pass.ADNI_ID.chr19.vcf/apoe_region.vcf"
+
+apoe_wgs <- vcfR::vcfR2tidy(vcf_data, format_fields = c("GT")) %>%
+  magrittr::extract2('gt') %>%
+  filter(POS %in% c("45411941", "45412079")) %>%
+  select(-ChromKey, -gt_GT) %>%
+  mutate(
+    POS = ifelse(POS == 45412079, 'rs7412', 'rs429358'), 
+    RID = sub("^0+", "", str_extract(Indiv, "\\d{4}$")), 
+    RID = as.numeric(RID)
+  ) %>%
+  pivot_wider(names_from = POS, values_from = gt_GT_alleles) %>%
+  arrange(RID)
+  
+
+semi_join(gen.raw, apoe_wgs, by = c('PTID' = 'Indiv')) 
+semi_join(gen.raw, apoe_wgs, by = c('PTID' = 'Indiv')) %>%
+  group_by(PTID) %>% slice_max(VISDATE) %>%
+  ungroup() %>%
+  count(PHASE, VISCODE2)
+```
+
+
+```{r}
+
+rids <- bind_rows(
+  select(ts, RID), 
+  select(dnam, RID)
+) %>%
+  distinct(RID)
+
+
+adni.raw <- merge %>%
+  left_join(select(apoe_wgs, -RID), by = c("PTID" = "Indiv")) %>%
+  left_join(dnam %>% select(-DateDrawn_methy, -Phase_methy),
+            by = c('RID', 'EXAMDATE' = 'Edate_methy')) %>%
+  left_join(ts %>% select(-VISCODE, -VISCODE2, -update_stamp, -DATE_DRAWN, -DATE_RECEIVED, -PHASE), 
+            by = c('RID', 'EXAMDATE' = 'EXAM_DATE')) %>%
+  semi_join(rids) %>%
+  mutate(
+        months = case_when(
+      VISCODE == "bl" ~ '0', 
+      str_detect(VISCODE, "m*") ~ str_replace(VISCODE, "m", "")
+    ), 
+    months = as.numeric(months), 
+  ) %>%
+  relocate(months, .after = VISCODE)
+  
+adni <- adni.raw %>% 
+  filter(!is.na(PlateNumber) | !is.na(PLATE)) %>%
+  group_by(RID) %>%
+  mutate(
+    visit = 1:n(),
+    visits = n()
+  )  %>%
+  relocate(visit, visits, .after = months) %>%
+  ungroup()
+
+
+adni %>% 
+  # filter(visits == 3) %>%
+  group_by(visit) %>%
+  summarise(
+    age = mean(age),
+    n = n(),
+    n_wgs = sum(!is.na(rs7412)),
+    n_mth = sum(!is.na(CausAge)),
+    n_tel = sum(!is.na(TS_RATIO))
+  ) 
+
+```
+
+
+```{r}
+adni %>% count(is.na(CausAge))
+adni %>% count(is.na(TS_RATIO))
+
+test <- full_join(
+  select(dnam, RID, Edate_methy, CausAge), 
+  select(ts, RID, EXAM_DATE, TS_RATIO), 
+  by = c('RID', 'Edate_methy' = 'EXAM_DATE'))
+
+dnam.raw <- map.raw %>%
+  select(barcodes, RID, Phase,  Edate, DateDrawn, PlateNumber, Array) %>%
+  rename(Phase_methy = Phase,  Edate_methy = Edate, DateDrawn_methy = DateDrawn) %>%
+  arrange(RID, Edate_methy, PlateNumber) %>%
+  left_join(, 
+            by = c('RID', 'Edate_methy' = 'EXAMDATE'))  %>%
+  left_join(clocks.raw, by = 'barcodes') %>%
+  left_join(apoe_wgs, by = 'RID')
+
+
+  mutate(
+    origprot = first(Phase_methy), 
+    months = case_when(
+      VISCODE == "bl" ~ '0', 
+      str_detect(VISCODE, "m*") ~ str_replace(VISCODE, "m", "")
+    ), 
+    months = as.numeric(months), 
+    initial_methyl = case_when(
+      first(VISCODE) == "bl" ~ "baseline", 
+      str_detect(VISCODE, "m*") ~ "followup"
+    )
+  ) %>%
+  ungroup() %>%
+  relocate(origprot, .after = Phase_methy) %>%
+  relocate(months, initial_methyl, .after = VISCODE)
+
+dnam %>%
+  left_join(meth_visits, by = "RID") %>%
+  filter(visits == 3) %>%
+  group_by(RID) %>% 
+  slice_min(Edate_methy) %>%
+  group_by(origprot) %>%
+  count(initial_methyl) %>%
+  print(n = Inf)
+
+dnam %>%
+  left_join(meth_visits, by = "RID") %>%
+  # filter(visits == 3) %>%
+  group_by(RID) %>% 
+  slice_min(Edate_methy) %>%
+  ungroup() %>%
+  count(is.na(rs7412))
+
+filter(dnam, Edate_methy != DateDrawn_methy)
+count(dnam, Edate_methy == DateDrawn_methy)  
+
+meth_visits <- dnam %>%
+  group_by(RID) %>%
+  summarise(visits = n()) 
+
+count(dnam, n())
+
+
+
+
+```
+
+```{r}
+ba <- dnam %>% 
+  select(barcodes, RID, Edate_methy, AGE, DX, CDRSB, Horvathv2, Hannum, Lin, PhenoAge, CausAge, DNAmGrimAgev2) %>%
+  group_by(RID) %>%
+  slice_min(Edate_methy) %>%
+  ungroup() %>%
+  pivot_longer(
+    cols = Horvathv2:DNAmGrimAgev2, 
+    names_to = 'clock', 
+    values_to = 'ba'
+  )
+
+
+ggplot(ba, aes(x = AGE, y = ba, colour = clock)) + 
+  facet_wrap(facets = vars(clock)) + 
+  geom_point(color = 'black') + 
+  geom_smooth(method='lm', formula= y~x) + 
+  theme_bw()
+  
+ggplot(ba, aes(x = AGE, y = ba, colour = DX)) + 
+  facet_wrap(facets = vars(clock)) + 
+  geom_point() + 
+  geom_smooth(method='lm', formula= y~x, color = "black") + 
+  theme_bw()
+  
+
+ggplot(ba, aes(x = CDRSB, y = ba, colour = clock)) + 
+  facet_wrap(facets = vars(clock)) + 
+  geom_point(color = 'black') + 
+  geom_smooth(method='lm', formula= y~x) + 
+  theme_bw()
+
+```
+
+
+```{r}
+lm(CDRSB ~ CausAge + AGE + PTGENDER + PTEDUCAT + APOE4 , data = dnam) %>%
+  summary()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
