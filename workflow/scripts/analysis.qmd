@@ -9,7 +9,7 @@ editor_options:
 ```{r}
 library(tidyverse)
 
-setwd("~/gitcode/DNAm")
+setwd("~/gitcode/R01_EAA")
 
 ```
 
@@ -48,21 +48,103 @@ Second-generation clocks are designed to predict health outcomes, morbidity, and
 ## Clinical
 merge.raw <- read_csv("resources/ADNI/ADNIMERGE_25Sep2023.csv")
 
-merge <- select(merge.raw, RID, PTID, COLPROT, ORIGPROT, VISCODE, EXAMDATE, EXAMDATE_bl, AGE, PTGENDER, PTEDUCAT, APOE4, 
+merge <- select(merge.raw, RID, PTID, COLPROT, ORIGPROT, VISCODE, EXAMDATE, EXAMDATE_bl, 
+                AGE, PTGENDER, PTEDUCAT, APOE4, PTRACCAT, PTETHCAT,
                 DX_bl, DX, CDRSB, ADAS13,
-                FDG, PIB, AV45, FBB, ABETA, TAU, PTAU, ADAS13, Hippocampus, WholeBrain) %>%
+                FDG, PIB, AV45, ABETA, TAU, PTAU, ADAS13, Hippocampus, WholeBrain) %>%
+  mutate(
+    race = case_when(
+      # ptraccat != "Asian" & ptethcat != "Hisp/Latino" & ptraccat != "Black" 
+      #  & ptraccat != "White" ~ "Other",
+      PTRACCAT == "White" & PTETHCAT != "Hisp/Latino" ~ "NHW",
+      PTRACCAT == "White" & PTETHCAT == "Hisp/Latino" ~ "Hispanic",
+      PTRACCAT == "More than one" & PTETHCAT == "Hisp/Latino" ~ "Hispanic",
+      PTRACCAT == "Black" ~ "Black",
+      PTRACCAT == "Asian" ~ "Asian",
+      PTRACCAT == "Unknown" ~ "Other",
+      PTRACCAT == "Am Indian/Alaskan" ~ "AIAN",
+      PTRACCAT == "Hawaiian/Other PI" ~ "NHPI",
+      PTRACCAT == "More than one" ~ "SOR",
+      TRUE ~ NA_character_
+    )) %>% 
   arrange(RID, EXAMDATE) %>%
   group_by(RID) %>%
   mutate(
     years_since_baseline = as.numeric(difftime(EXAMDATE, EXAMDATE_bl, units = "days")) / 365.25,
     age = AGE + years_since_baseline
-  )
+  ) %>%
+  ungroup()
   
-merge %>%
-  group_by(RID) %>%  
+dx_lv <- merge %>%
+  select(RID, VISCODE, EXAMDATE, EXAMDATE_bl, years_since_baseline, age, DX) %>%
+  filter(RID %in% rids$RID) %>% 
+  group_by(RID) %>% 
+  fill(DX, .direction = "down") %>%
   slice_max(EXAMDATE) %>%
-  ungroup() %>% 
-  summary()
+  ungroup() 
+
+dx_lv %>% 
+  summarise(
+    age = mean(age), 
+    years = mean(years_since_baseline)
+  )
+
+csf <- merge %>%
+  select(RID, VISCODE, EXAMDATE, years_since_baseline, age, ABETA, TAU, PTAU) %>%
+  filter(RID %in% rids$RID) %>% 
+  filter(!is.na(ABETA), !is.na(TAU), !is.na(PTAU)) %>%
+  group_by(RID) %>% 
+  slice_max(EXAMDATE) %>%
+  ungroup()
+
+csf %>% 
+  summarise(
+    age = mean(age), 
+    years = mean(years_since_baseline)
+  )
+
+fdg <- merge %>%
+  select(RID, VISCODE, EXAMDATE, years_since_baseline, age, FDG) %>%
+  filter(RID %in% rids$RID) %>% 
+  filter(!is.na(FDG)) %>%
+  group_by(RID) %>% 
+  slice_max(EXAMDATE) %>%
+  ungroup()
+
+fdg %>% 
+  summarise(
+    age = mean(age), 
+    years = mean(years_since_baseline)
+  )
+
+av45 <- merge %>%
+  select(RID, VISCODE, EXAMDATE, years_since_baseline, age, AV45) %>%
+  filter(RID %in% rids$RID) %>% 
+  filter(!is.na(AV45)) %>%
+  group_by(RID) %>% 
+  slice_max(EXAMDATE) %>%
+  ungroup()
+
+av45 %>% 
+  summarise(
+    age = mean(age), 
+    years = mean(years_since_baseline)
+  )
+
+brain <- merge %>%
+  select(RID, EXAMDATE, years_since_baseline, age, WholeBrain, Hippocampus) %>%
+  filter(RID %in% rids$RID) %>% 
+  filter(!is.na(WholeBrain), !is.na(Hippocampus)) %>%
+  group_by(RID) %>% 
+  slice_max(EXAMDATE) %>%
+  ungroup()
+
+brain %>% 
+  summarise(
+    age = mean(age), 
+    years = mean(years_since_baseline),
+  )
+
 ```
 
 A total of 649 ADNI participants hadmethylation data. Participants varied on the number of repeatDNA methylation measurements they had: 83 had only abaseline measurement; 121 had 2 measurements (baseline plus 1repeat), mean 14.5 months between measurements (SD = 7.06);407 had 3 measurements, mean 12.1 months between mea-surements (SD = 1.5); 29 had 4, mean 10.4 months betweenmeasurements (SD = 3.54); and 9 had 5, mean 12.5 monthsbetween measurements (SD = 2.25). [Sugden et al 2022](https://www.neurology.org/doi/10.1212/WNL.0000000000200898)
@@ -149,18 +231,24 @@ adni.raw <- merge %>%
             by = c('RID', 'EXAMDATE' = 'Edate_methy')) %>%
   left_join(ts %>% select(-VISCODE, -VISCODE2, -update_stamp, -DATE_DRAWN, -DATE_RECEIVED, -PHASE), 
             by = c('RID', 'EXAMDATE' = 'EXAM_DATE')) %>%
-  semi_join(rids) %>%
+  semi_join(rids) 
+  
+adni <- adni.raw %>% 
+  filter(!is.na(PlateNumber) | !is.na(PLATE)) %>%
+  select(-DX) %>%
+  full_join(dx_lv %>% select(RID, VISCODE, EXAMDATE, EXAMDATE_bl, years_since_baseline, age, DX)) %>%
+  arrange(RID, EXAMDATE) %>%
+  relocate(DX, .after = DX_bl) %>%
+  relocate(age, .after = AGE) %>%
   mutate(
-        months = case_when(
+    cohort = "ADNI",
+    months = case_when(
       VISCODE == "bl" ~ '0', 
       str_detect(VISCODE, "m*") ~ str_replace(VISCODE, "m", "")
     ), 
     months = as.numeric(months), 
   ) %>%
-  relocate(months, .after = VISCODE)
-  
-adni <- adni.raw %>% 
-  filter(!is.na(PlateNumber) | !is.na(PLATE)) %>%
+  relocate(months, .after = VISCODE) %>%
   group_by(RID) %>%
   mutate(
     visit = 1:n(),
@@ -178,7 +266,9 @@ adni %>%
     n = n(),
     n_wgs = sum(!is.na(rs7412)),
     n_mth = sum(!is.na(CausAge)),
-    n_tel = sum(!is.na(TS_RATIO))
+    n_tel = sum(!is.na(TS_RATIO)), 
+    median_age = median(age),
+    iqr = IQR(age)
   ) 
 
 ```
@@ -281,9 +371,66 @@ ggplot(ba, aes(x = CDRSB, y = ba, colour = clock)) +
   geom_smooth(method='lm', formula= y~x) + 
   theme_bw()
 
+ggplot(dx_lv, aes(x=age, y="ADNI") ) +
+  stat_density_2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(
+    legend.position='none'
+  )
+
+ggplot(adni, aes(x = age, y = cohort, fill = factor(visit))) +
+  geom_boxplot() +
+  labs(x = "Age", y = "Cohort", fill = "Visit") +
+  theme_minimal()
+
+
+
+
 ```
 
 ```{r}
 lm(CDRSB ~ CausAge + AGE + PTGENDER + PTEDUCAT + APOE4 , data = dnam) %>%
   summary()
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
