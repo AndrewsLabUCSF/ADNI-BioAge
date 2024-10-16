@@ -1,0 +1,908 @@
+## Cognition 
+> cog_dnam.res <- lm(cogng_demog_slope ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_dnam.res) 
+
+Call:
+lm(formula = cogng_demog_slope ~ z_dnam + age_death + msex + 
+    apoe + tissue, data = rosmap.df)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.34862 -0.04728  0.02092  0.06496  0.19292 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept) -0.262746   0.102332  -2.568   0.0106 *  
+z_dnam      -0.017000   0.007713  -2.204   0.0281 *  
+age_death    0.002783   0.001152   2.415   0.0162 *  
+msex         0.007957   0.009758   0.815   0.4153    
+apoee2+      0.010377   0.013655   0.760   0.4477    
+apoee4+     -0.052414   0.010452  -5.015 7.96e-07 ***
+tissuePCC    0.021782   0.013153   1.656   0.0985 .  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.09331 on 405 degrees of freedom
+  (214 observations deleted due to missingness)
+Multiple R-squared:  0.09799,	Adjusted R-squared:  0.08462 
+F-statistic: 7.332 on 6 and 405 DF,  p-value: 1.864e-07
+
+> cog_mtcn.res <- lm(cogng_demog_slope ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_mtcn.res) 
+
+Call:
+lm(formula = cogng_demog_slope ~ z_mtcn + age_death + msex + 
+    apoe + tissue, data = rosmap.df)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.32896 -0.04846  0.01805  0.06208  0.18144 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept) -0.2396255  0.0564702  -4.243 2.62e-05 ***
+z_mtcn       0.0204031  0.0040006   5.100 4.83e-07 ***
+age_death    0.0024711  0.0006239   3.961 8.55e-05 ***
+msex         0.0164141  0.0083559   1.964   0.0500 .  
+apoee2+      0.0169079  0.0120067   1.408   0.1597    
+apoee4+     -0.0442477  0.0092552  -4.781 2.30e-06 ***
+tissuePCC    0.0228901  0.0119468   1.916   0.0559 .  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.08863 on 500 degrees of freedom
+  (119 observations deleted due to missingness)
+Multiple R-squared:  0.1663,	Adjusted R-squared:  0.1563 
+F-statistic: 16.63 on 6 and 500 DF,  p-value: < 2.2e-16
+
+> cog_libra.res <- lm(cogng_demog_slope ~ libra + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_libra.res) 
+
+Call:
+lm(formula = cogng_demog_slope ~ libra + age_death + msex + apoe + 
+    tissue, data = rosmap.df)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.33788 -0.04781  0.02171  0.05892  0.17218 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept) -0.2080557  0.0534504  -3.892 0.000111 ***
+libra       -0.0010201  0.0015701  -0.650 0.516157    
+age_death    0.0021973  0.0005912   3.716 0.000222 ***
+msex         0.0160462  0.0080968   1.982 0.047981 *  
+apoee2+      0.0139176  0.0116227   1.197 0.231630    
+apoee4+     -0.0558157  0.0086098  -6.483 1.95e-10 ***
+tissuePCC    0.0183220  0.0120858   1.516 0.130073    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.0905 on 571 degrees of freedom
+  (48 observations deleted due to missingness)
+Multiple R-squared:  0.1186,	Adjusted R-squared:  0.1094 
+F-statistic: 12.81 on 6 and 571 DF,  p-value: 1.34e-13
+
+> cog_gpath.res <- lm(cogng_demog_slope ~ gpath + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_gpath.res) 
+
+Call:
+lm(formula = cogng_demog_slope ~ gpath + age_death + msex + apoe + 
+    tissue, data = rosmap.df)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.36260 -0.04339  0.01727  0.05607  0.17380 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept) -0.2175619  0.0490767  -4.433 1.11e-05 ***
+gpath       -0.0560273  0.0061033  -9.180  < 2e-16 ***
+age_death    0.0027804  0.0005462   5.090 4.82e-07 ***
+msex         0.0055557  0.0074729   0.743   0.4575    
+apoee2+      0.0012589  0.0106356   0.118   0.9058    
+apoee4+     -0.0259987  0.0085264  -3.049   0.0024 ** 
+tissuePCC    0.0137782  0.0111972   1.230   0.2190    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.0845 on 589 degrees of freedom
+  (30 observations deleted due to missingness)
+Multiple R-squared:  0.2254,	Adjusted R-squared:  0.2175 
+F-statistic: 28.56 on 6 and 589 DF,  p-value: < 2.2e-16
+
+> 
+> ## Global Pathology 
+> gpath_dnam.res <- lm(gpath ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(gpath_dnam.res) 
+
+Call:
+lm(formula = gpath ~ z_dnam + age_death + msex + apoe + tissue, 
+    data = rosmap.df)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-1.1497 -0.4135 -0.1026  0.3769  2.0971 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  0.542510   0.592282   0.916 0.360196    
+z_dnam       0.092870   0.044325   2.095 0.036736 *  
+age_death    0.001758   0.006664   0.264 0.792032    
+msex        -0.107154   0.055554  -1.929 0.054406 .  
+apoee2+     -0.262820   0.077462  -3.393 0.000755 ***
+apoee4+      0.521871   0.060068   8.688  < 2e-16 ***
+tissuePCC   -0.028435   0.074910  -0.380 0.704433    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.549 on 432 degrees of freedom
+  (187 observations deleted due to missingness)
+Multiple R-squared:  0.2324,	Adjusted R-squared:  0.2218 
+F-statistic:  21.8 on 6 and 432 DF,  p-value: < 2.2e-16
+
+> gpath_mtcn.res <- lm(gpath ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.df); summary(gpath_mtcn.res) 
+
+Call:
+lm(formula = gpath ~ z_mtcn + age_death + msex + apoe + tissue, 
+    data = rosmap.df)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-1.27182 -0.45528 -0.09706  0.38243  1.96963 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept) -0.076144   0.365948  -0.208 0.835253    
+z_mtcn      -0.095735   0.025936  -3.691 0.000247 ***
+age_death    0.010089   0.004043   2.495 0.012892 *  
+msex        -0.178575   0.053807  -3.319 0.000967 ***
+apoee2+     -0.249580   0.077564  -3.218 0.001372 ** 
+apoee4+      0.428661   0.059897   7.157 2.82e-12 ***
+tissuePCC   -0.085774   0.077301  -1.110 0.267680    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.5829 on 521 degrees of freedom
+  (98 observations deleted due to missingness)
+Multiple R-squared:  0.1851,	Adjusted R-squared:  0.1757 
+F-statistic: 19.73 on 6 and 521 DF,  p-value: < 2.2e-16
+
+> gpath_libra.res <- lm(gpath ~ libra + age_death + msex + apoe + tissue, data = rosmap.df); summary(gpath_libra.res) 
+
+Call:
+lm(formula = gpath ~ libra + age_death + msex + apoe + tissue, 
+    data = rosmap.df)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-1.2465 -0.4384 -0.1051  0.3685  2.0379 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept) -0.311268   0.335509  -0.928 0.353913    
+libra        0.009673   0.009643   1.003 0.316236    
+age_death    0.011994   0.003713   3.230 0.001307 ** 
+msex        -0.160334   0.050440  -3.179 0.001556 ** 
+apoee2+     -0.252690   0.072391  -3.491 0.000517 ***
+apoee4+      0.509485   0.053891   9.454  < 2e-16 ***
+tissuePCC   -0.042353   0.075696  -0.560 0.576018    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.5762 on 597 degrees of freedom
+  (22 observations deleted due to missingness)
+Multiple R-squared:  0.1884,	Adjusted R-squared:  0.1802 
+F-statistic: 23.09 on 6 and 597 DF,  p-value: < 2.2e-16
+
+> 
+> ## mtDNAcn
+> mtcn_dnam.res <- lm(z_mtcn ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(mtcn_dnam.res) 
+
+Call:
+lm(formula = z_mtcn ~ z_dnam + age_death + msex + apoe + tissue, 
+    data = rosmap.df)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-2.6210 -0.7608 -0.0697  0.7099  3.2448 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept) -1.23603    1.31281  -0.942    0.347    
+z_dnam      -0.16196    0.09900  -1.636    0.103    
+age_death    0.01630    0.01473   1.107    0.269    
+msex         0.06235    0.11860   0.526    0.599    
+apoee2+      0.04116    0.17032   0.242    0.809    
+apoee4+     -0.51752    0.12873  -4.020 7.12e-05 ***
+tissuePCC   -0.13595    0.15207  -0.894    0.372    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 1.068 on 352 degrees of freedom
+  (267 observations deleted due to missingness)
+Multiple R-squared:  0.0623,	Adjusted R-squared:  0.04632 
+F-statistic: 3.898 on 6 and 352 DF,  p-value: 0.000877
+
+> mtcn_libra.res <- lm(z_mtcn ~ libra + age_death + msex + apoe + tissue, data = rosmap.df); summary(mtcn_libra.res) 
+
+Call:
+lm(formula = z_mtcn ~ libra + age_death + msex + apoe + tissue, 
+    data = rosmap.df)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-2.6732 -0.6439 -0.0222  0.6328  3.3713 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  0.512420   0.618947   0.828    0.408    
+libra        0.009944   0.017366   0.573    0.567    
+age_death   -0.004599   0.006838  -0.673    0.502    
+msex         0.102951   0.091450   1.126    0.261    
+apoee2+      0.105699   0.131129   0.806    0.421    
+apoee4+     -0.422599   0.099638  -4.241 2.63e-05 ***
+tissuePCC   -0.082534   0.130591  -0.632    0.528    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.9849 on 520 degrees of freedom
+  (99 observations deleted due to missingness)
+Multiple R-squared:  0.04319,	Adjusted R-squared:  0.03215 
+F-statistic: 3.912 on 6 and 520 DF,  p-value: 0.0007812
+
+> 
+> ## dnam
+> dnma_mtcn.res <- lm(z_dnam ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.df) ; summary(dnma_mtcn.res) 
+
+Call:
+lm(formula = z_dnam ~ z_mtcn + age_death + msex + apoe + tissue, 
+    data = rosmap.df)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-1.79955 -0.34593 -0.00097  0.30346  2.64370 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept) -10.530440   0.426611 -24.684   <2e-16 ***
+z_mtcn       -0.046589   0.028479  -1.636    0.103    
+age_death     0.118598   0.004758  24.923   <2e-16 ***
+msex         -0.060064   0.063552  -0.945    0.345    
+apoee2+      -0.070506   0.091279  -0.772    0.440    
+apoee4+       0.071765   0.070506   1.018    0.309    
+tissuePCC     0.102112   0.081471   1.253    0.211    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.5731 on 352 degrees of freedom
+  (267 observations deleted due to missingness)
+Multiple R-squared:  0.6536,	Adjusted R-squared:  0.6477 
+F-statistic: 110.7 on 6 and 352 DF,  p-value: < 2.2e-16
+
+> dnam_libra.res <- lm(z_dnam ~ libra + age_death + msex + apoe + tissue, data = rosmap.df) ; summary(dnam_libra.res) 
+
+Call:
+lm(formula = z_dnam ~ libra + age_death + msex + apoe + tissue, 
+    data = rosmap.df)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-1.80295 -0.36609 -0.03237  0.35983  2.71086 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept) -10.615396   0.399872 -26.547   <2e-16 ***
+libra        -0.021022   0.012080  -1.740   0.0826 .  
+age_death     0.120194   0.004468  26.900   <2e-16 ***
+msex         -0.121602   0.061068  -1.991   0.0471 *  
+apoee2+      -0.047048   0.087581  -0.537   0.5914    
+apoee4+       0.139581   0.065199   2.141   0.0329 *  
+tissuePCC     0.042510   0.082693   0.514   0.6075    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.592 on 416 degrees of freedom
+  (203 observations deleted due to missingness)
+Multiple R-squared:  0.6493,	Adjusted R-squared:  0.6442 
+F-statistic: 128.3 on 6 and 416 DF,  p-value: < 2.2e-16
+
+> 
+> ## Summary Table 
+> regresion.res <- bind_rows(
++   tidy(cog_dnam.res) %>% mutate(outcome = 'cog'),
++   tidy(cog_mtcn.res) %>% mutate(outcome = 'cog'),
++   tidy(cog_libra.res) %>% mutate(outcome = 'cog'),
++   tidy(cog_gpath.res) %>% mutate(outcome = 'cog'),
++   
++   tidy(gpath_dnam.res) %>% mutate(outcome = 'gpath'),
++   tidy(gpath_mtcn.res) %>% mutate(outcome = 'gpath'),
++   tidy(gpath_libra.res) %>% mutate(outcome = 'gpath'),
++   
++   tidy(mtcn_dnam.res) %>% mutate(outcome = 'mtcn'),
++   tidy(mtcn_libra.res) %>% mutate(outcome = 'mtcn'),
++   
++   tidy(dnma_mtcn.res) %>% mutate(outcome = 'dnam'),
++   tidy(dnam_libra.res) %>% mutate(outcome = 'dnam'),
++ 
++ ) %>%
++   relocate(outcome) %>%
++   filter(term %in% c('z_dnam', 'z_mtcn', 'gpath', 'libra')) %>%
++   mutate(signif = gtools::stars.pval(p.value))
+> 
+> regresion.res
+# A tibble: 11 × 7
+   outcome term   estimate std.error statistic  p.value signif
+   <chr>   <chr>     <dbl>     <dbl>     <dbl>    <dbl> <chr> 
+ 1 cog     z_dnam -0.0170    0.00771    -2.20  2.81e- 2 "*"   
+ 2 cog     z_mtcn  0.0204    0.00400     5.10  4.83e- 7 "***" 
+ 3 cog     libra  -0.00102   0.00157    -0.650 5.16e- 1 " "   
+ 4 cog     gpath  -0.0560    0.00610    -9.18  7.25e-19 "***" 
+ 5 gpath   z_dnam  0.0929    0.0443      2.10  3.67e- 2 "*"   
+ 6 gpath   z_mtcn -0.0957    0.0259     -3.69  2.47e- 4 "***" 
+ 7 gpath   libra   0.00967   0.00964     1.00  3.16e- 1 " "   
+ 8 mtcn    z_dnam -0.162     0.0990     -1.64  1.03e- 1 " "   
+ 9 mtcn    libra   0.00994   0.0174      0.573 5.67e- 1 " "   
+10 dnam    z_mtcn -0.0466    0.0285     -1.64  1.03e- 1 " "   
+11 dnam    libra  -0.0210    0.0121     -1.74  8.26e- 2 "."   
+
+
+## interactions
+> cog_dnam_mtcn_int.res <- lm(cogng_demog_slope ~ z_mtcn*z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_dnam_mtcn_int.res)
+
+Call:
+lm(formula = cogng_demog_slope ~ z_mtcn * z_dnam + age_death + 
+    msex + apoe + tissue, data = rosmap.df)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.33913 -0.05015  0.01821  0.05792  0.18408 
+
+Coefficients:
+               Estimate Std. Error t value Pr(>|t|)    
+(Intercept)   -0.277356   0.114964  -2.413 0.016386 *  
+z_mtcn         0.021747   0.004663   4.664 4.52e-06 ***
+z_dnam        -0.018540   0.008730  -2.124 0.034434 *  
+age_death      0.002790   0.001290   2.163 0.031245 *  
+msex           0.012985   0.010493   1.238 0.216777    
+apoee2+        0.013613   0.015034   0.905 0.365888    
+apoee4+       -0.044158   0.011681  -3.780 0.000186 ***
+tissuePCC      0.033708   0.013331   2.529 0.011917 *  
+z_mtcn:z_dnam  0.009230   0.005012   1.841 0.066457 .  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.09174 on 330 degrees of freedom
+  (287 observations deleted due to missingness)
+Multiple R-squared:  0.1786,	Adjusted R-squared:  0.1587 
+F-statistic: 8.968 on 8 and 330 DF,  p-value: 3.844e-11
+
+> cog_dnam_libra_int.res <- lm(cogng_demog_slope ~ libra*z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_dnam_libra_int.res)
+
+Call:
+lm(formula = cogng_demog_slope ~ libra * z_dnam + age_death + 
+    msex + apoe + tissue, data = rosmap.df)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.34486 -0.04740  0.02228  0.06486  0.19808 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  -0.276594   0.105809  -2.614  0.00929 ** 
+libra        -0.001138   0.002020  -0.563  0.57361    
+z_dnam       -0.016684   0.007964  -2.095  0.03684 *  
+age_death     0.002956   0.001193   2.478  0.01362 *  
+msex          0.009584   0.010060   0.953  0.34136    
+apoee2+       0.007391   0.014329   0.516  0.60631    
+apoee4+      -0.055351   0.010641  -5.202 3.19e-07 ***
+tissuePCC     0.021497   0.013391   1.605  0.10924    
+libra:z_dnam  0.001950   0.001949   1.001  0.31753    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.09395 on 390 degrees of freedom
+  (227 observations deleted due to missingness)
+Multiple R-squared:  0.1053,	Adjusted R-squared:  0.08695 
+F-statistic: 5.738 on 8 and 390 DF,  p-value: 6.407e-07
+
+> cog_mtcn_libra_int.res <- lm(cogng_demog_slope ~ libra*z_mtcn + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_mtcn_libra_int.res)
+
+Call:
+lm(formula = cogng_demog_slope ~ libra * z_mtcn + age_death + 
+    msex + apoe + tissue, data = rosmap.df)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.32836 -0.04758  0.01750  0.06181  0.18087 
+
+Coefficients:
+               Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  -0.2383242  0.0567510  -4.199 3.17e-05 ***
+libra        -0.0008323  0.0016208  -0.513 0.607832    
+z_mtcn        0.0204464  0.0040099   5.099 4.86e-07 ***
+age_death     0.0024572  0.0006270   3.919 0.000101 ***
+msex          0.0158866  0.0084326   1.884 0.060155 .  
+apoee2+       0.0171612  0.0120416   1.425 0.154737    
+apoee4+      -0.0444267  0.0092804  -4.787 2.23e-06 ***
+tissuePCC     0.0228775  0.0119678   1.912 0.056503 .  
+libra:z_mtcn  0.0001675  0.0016526   0.101 0.919305    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.08878 on 498 degrees of freedom
+  (119 observations deleted due to missingness)
+Multiple R-squared:  0.1668,	Adjusted R-squared:  0.1534 
+F-statistic: 12.46 on 8 and 498 DF,  p-value: 2.414e-16
+
+> 
+> gpath_dnam_mtcn_int.res <- lm(gpath ~ z_mtcn*z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(gpath_dnam_mtcn_int.res)
+
+Call:
+lm(formula = gpath ~ z_mtcn * z_dnam + age_death + msex + apoe + 
+    tissue, data = rosmap.df)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-1.20299 -0.41757 -0.08191  0.34891  2.08396 
+
+Coefficients:
+                Estimate Std. Error t value Pr(>|t|)    
+(Intercept)    0.7483759  0.6909423   1.083  0.27950    
+z_mtcn        -0.0895460  0.0280737  -3.190  0.00155 ** 
+z_dnam         0.1122481  0.0521713   2.152  0.03212 *  
+age_death      0.0004824  0.0077508   0.062  0.95041    
+msex          -0.1321972  0.0623514  -2.120  0.03469 *  
+apoee2+       -0.2592529  0.0896338  -2.892  0.00406 ** 
+apoee4+        0.4330295  0.0697057   6.212 1.48e-09 ***
+tissuePCC     -0.0971529  0.0799119  -1.216  0.22490    
+z_mtcn:z_dnam -0.0294601  0.0304480  -0.968  0.33394    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.5609 on 350 degrees of freedom
+  (267 observations deleted due to missingness)
+Multiple R-squared:  0.2292,	Adjusted R-squared:  0.2116 
+F-statistic: 13.01 on 8 and 350 DF,  p-value: < 2.2e-16
+
+> gpath_dnam_libra_int.res <- lm(gpath ~ libra*z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(gpath_dnam_libra_int.res)
+
+Call:
+lm(formula = gpath ~ libra * z_dnam + age_death + msex + apoe + 
+    tissue, data = rosmap.df)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-1.15008 -0.41176 -0.08754  0.38697  2.08025 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept)   0.404837   0.612770   0.661  0.50919    
+libra        -0.007604   0.011313  -0.672  0.50185    
+z_dnam        0.083639   0.045767   1.827  0.06835 .  
+age_death     0.003269   0.006906   0.473  0.63626    
+msex         -0.120298   0.057357  -2.097  0.03657 *  
+apoee2+      -0.241152   0.081708  -2.951  0.00334 ** 
+apoee4+       0.523905   0.061134   8.570  < 2e-16 ***
+tissuePCC    -0.020427   0.077170  -0.265  0.79137    
+libra:z_dnam  0.008469   0.011236   0.754  0.45144    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.552 on 414 degrees of freedom
+  (203 observations deleted due to missingness)
+Multiple R-squared:  0.2306,	Adjusted R-squared:  0.2158 
+F-statistic: 15.51 on 8 and 414 DF,  p-value: < 2.2e-16
+
+> gpath_mtcn_libra_int.res <- lm(gpath ~ libra*z_mtcn + age_death + msex + apoe + tissue, data = rosmap.df); summary(gpath_mtcn_libra_int.res)
+
+Call:
+lm(formula = gpath ~ libra * z_mtcn + age_death + msex + apoe + 
+    tissue, data = rosmap.df)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-1.21285 -0.45339 -0.08808  0.38133  1.96798 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  -0.130080   0.367117  -0.354 0.723237    
+libra         0.008121   0.010278   0.790 0.429837    
+z_mtcn       -0.095863   0.025947  -3.694 0.000244 ***
+age_death     0.010646   0.004055   2.625 0.008910 ** 
+msex         -0.171240   0.054168  -3.161 0.001663 ** 
+apoee2+      -0.248718   0.077635  -3.204 0.001440 ** 
+apoee4+       0.434488   0.059968   7.245 1.57e-12 ***
+tissuePCC    -0.084077   0.077288  -1.088 0.277170    
+libra:z_mtcn -0.010917   0.010668  -1.023 0.306604    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.5827 on 518 degrees of freedom
+  (99 observations deleted due to missingness)
+Multiple R-squared:  0.1883,	Adjusted R-squared:  0.1757 
+F-statistic: 15.02 on 8 and 518 DF,  p-value: < 2.2e-16
+
+
+# Mediation 
+
+> ## mtDNAcn -> path -> cog 
+> cog_gpath_mtcn.m <- lm(gpath ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
+> cog_gpath_mtcn.y <- lm(cogng_demog_slope ~ z_mtcn + gpath + age_death + msex + apoe + tissue, data = rosmap.cc)
+> 
+> cog_gpath_mtcn.med <- mediate(cog_gpath_mtcn.m, cog_gpath_mtcn.y, treat = "z_mtcn", mediator = "gpath")
+> summary(cog_gpath_mtcn.med)
+
+Causal Mediation Analysis 
+
+Quasi-Bayesian Confidence Intervals
+
+               Estimate 95% CI Lower 95% CI Upper p-value    
+ACME            0.00513      0.00173         0.01   0.002 ** 
+ADE             0.01803      0.00944         0.03  <2e-16 ***
+Total Effect    0.02316      0.01429         0.03  <2e-16 ***
+Prop. Mediated  0.21785      0.08111         0.40   0.002 ** 
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Sample Size Used: 338 
+
+
+Simulations: 1000 
+
+> 
+> ## DNAm -> path -> cog 
+> cog_gpath_dnam.m <- lm(gpath ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.cc)
+> cog_gpath_dnam.y <- lm(cogng_demog_slope ~ z_dnam + gpath + age_death + msex + apoe + tissue, data = rosmap.cc)
+> 
+> cog_gpath_dnam.med <- mediate(cog_gpath_dnam.m, cog_gpath_dnam.y, treat = "z_dnam", mediator = "gpath")
+> summary(cog_gpath_dnam.med)
+
+Causal Mediation Analysis 
+
+Quasi-Bayesian Confidence Intervals
+
+               Estimate 95% CI Lower 95% CI Upper p-value  
+ACME           -0.00776     -0.01491         0.00   0.020 *
+ADE            -0.01398     -0.03016         0.00   0.092 .
+Total Effect   -0.02174     -0.04047         0.00   0.020 *
+Prop. Mediated  0.34613      0.03781         1.18   0.040 *
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Sample Size Used: 338 
+
+
+Simulations: 1000 
+
+> 
+> ## DNAm -> mtDNAcn -> path 
+> gpath_mtcn_dnam.m <- lm(z_mtcn ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.cc)
+> gpath_mtcn_dnam.y <- lm(gpath ~ z_dnam + z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
+> 
+> gpath_mtcn_dnam.med <- mediate(gpath_mtcn_dnam.m, gpath_mtcn_dnam.y, treat = "z_dnam", mediator = "z_mtcn")
+> summary(gpath_mtcn_dnam.med)
+
+Causal Mediation Analysis 
+
+Quasi-Bayesian Confidence Intervals
+
+               Estimate 95% CI Lower 95% CI Upper p-value  
+ACME            0.01364     -0.00267         0.04   0.110  
+ADE             0.11250      0.00539         0.21   0.032 *
+Total Effect    0.12614      0.02509         0.23   0.022 *
+Prop. Mediated  0.09659     -0.05304         0.52   0.128  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Sample Size Used: 338 
+
+
+Simulations: 1000 
+
+> 
+> ## mtDNAcn -> DNAm -> path 
+> gpath_dnam_mtcn.m <- lm(z_dnam ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
+> gpath_dnam_mtcn.y <- lm(gpath ~ z_dnam + z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
+> 
+> gpath_dnam_mtcn.med <- mediate(gpath_dnam_mtcn.m, gpath_dnam_mtcn.y, treat = "z_mtcn", mediator = "z_dnam")
+> summary(gpath_dnam_mtcn.med)
+
+Causal Mediation Analysis 
+
+Quasi-Bayesian Confidence Intervals
+
+               Estimate 95% CI Lower 95% CI Upper p-value   
+ACME           -0.00488     -0.01467         0.00   0.148   
+ADE            -0.08137     -0.13791        -0.02   0.010 **
+Total Effect   -0.08625     -0.14151        -0.03   0.008 **
+Prop. Mediated  0.04967     -0.01997         0.22   0.156   
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Sample Size Used: 338 
+
+
+Simulations: 1000 
+
+> 
+> ## DNAm -> mtDNAcn -> cog 
+> cog_mtcn_dnam.m <- lm(z_mtcn ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.cc)
+> cog_mtcn_dnam.y <- lm(cogng_demog_slope ~ z_dnam + z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
+> 
+> cog_mtcn_dnam.med <- mediate(cog_mtcn_dnam.m, cog_mtcn_dnam.y, treat = "z_dnam", mediator = "z_mtcn")
+> summary(cog_mtcn_dnam.med)
+
+Causal Mediation Analysis 
+
+Quasi-Bayesian Confidence Intervals
+
+               Estimate 95% CI Lower 95% CI Upper p-value  
+ACME           -0.00359     -0.00878          0.0   0.124  
+ADE            -0.01807     -0.03570          0.0   0.034 *
+Total Effect   -0.02166     -0.04047          0.0   0.018 *
+Prop. Mediated  0.15929     -0.06565          0.7   0.126  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Sample Size Used: 338 
+
+
+Simulations: 1000 
+
+> 
+> ## mtDNAcn  -> DNAm -> cog 
+> cog_dnam_mtcn.m <- lm(z_dnam ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
+> cog_dnam_mtcn.y <- lm(cogng_demog_slope ~ z_dnam + z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
+> 
+> cog_dnam_mtcn.med <- mediate(cog_dnam_mtcn.m, cog_dnam_mtcn.y, treat = "z_mtcn", mediator = "z_dnam")
+> summary(cog_dnam_mtcn.med)
+
+Causal Mediation Analysis 
+
+Quasi-Bayesian Confidence Intervals
+
+                Estimate 95% CI Lower 95% CI Upper p-value    
+ACME            0.000835    -0.000213         0.00    0.16    
+ADE             0.022546     0.013074         0.03  <2e-16 ***
+Total Effect    0.023381     0.014149         0.03  <2e-16 ***
+Prop. Mediated  0.029636    -0.010348         0.12    0.16    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Sample Size Used: 338 
+
+
+Simulations: 1000 
+
+> 
+> ## Libra -> DNAm -> cog 
+> cog_dnam_libra.m <- lm(z_dnam ~ libra + age_death + msex + apoe + tissue, data = rosmap.cc)
+> cog_dnam_libra.y <- lm(cogng_demog_slope ~ z_dnam + libra + age_death + msex + apoe + tissue, data = rosmap.cc)
+> tidy(cog_dnam_libra.res)
+# A tibble: 8 × 5
+  term         estimate std.error statistic    p.value
+  <chr>           <dbl>     <dbl>     <dbl>      <dbl>
+1 (Intercept) -0.319      0.119      -2.68  0.00764   
+2 z_dnam      -0.0217     0.00903    -2.41  0.0166    
+3 libra       -0.000224   0.00219    -0.103 0.918     
+4 age_death    0.00330    0.00134     2.47  0.0140    
+5 msex         0.0157     0.0109      1.43  0.153     
+6 apoee2+      0.0165     0.0156      1.06  0.292     
+7 apoee4+     -0.0535     0.0118     -4.54  0.00000794
+8 tissuePCC    0.0285     0.0139      2.05  0.0414    
+> 
+> cog_dnam_libra.med <- mediate(cog_dnam_libra.m, cog_dnam_libra.y, treat = "libra", mediator = "z_dnam")
+> summary(cog_dnam_libra.med)
+
+Causal Mediation Analysis 
+
+Quasi-Bayesian Confidence Intervals
+
+                Estimate 95% CI Lower 95% CI Upper p-value
+ACME            1.40e-04    -4.14e-04         0.00    0.66
+ADE            -1.92e-04    -4.44e-03         0.00    0.91
+Total Effect   -5.24e-05    -4.34e-03         0.00    0.96
+Prop. Mediated  9.43e-03    -1.62e+00         2.13    0.94
+
+Sample Size Used: 338 
+
+
+Simulations: 1000 
+
+> sem_cov <- ' 
++  # regressions
++    cogng_demog_slope ~ gpath + age_death + msex + apoe4 + tissue
++    cogng_demog_slope ~ z_dnam + age_death + msex + apoe4 + tissue
++    cogng_demog_slope ~ z_mtcn+ age_death + msex + apoe4 + tissue
++    gpath ~ z_dnam + age_death + msex + apoe4 + tissue
++    gpath ~ z_mtcn + age_death + msex + apoe4 + tissue
++    z_mtcn ~ z_dnam + age_death + msex + apoe4 + tissue
++    z_dnam ~ libra + age_death + msex + apoe4 + tissue
++ '
+> 
+> sem_cov.res <- sem(model = sem_cov, data = rosmap.df, missing = 'ML') 
+Warning message:
+lavaan->lav_data_full():  
+   22 cases were deleted due to missing values in exogenous variable(s), while fixed.x = TRUE. 
+> summary(sem_cov.res,standardized=TRUE)
+lavaan 0.6-19 ended normally after 90 iterations
+
+  Estimator                                         ML
+  Optimization method                           NLMINB
+  Number of model parameters                        31
+
+                                                  Used       Total
+  Number of observations                           604         626
+  Number of missing patterns                         8            
+
+Model Test User Model:
+                                                      
+  Test statistic                                 1.665
+  Degrees of freedom                                 3
+  P-value (Chi-square)                           0.645
+
+Parameter Estimates:
+
+  Standard errors                             Standard
+  Information                                 Observed
+  Observed information based on                Hessian
+
+Regressions:
+                      Estimate  Std.Err  z-value  P(>|z|)   Std.lv  Std.all
+  cogng_demog_slope ~                                                      
+    gpath               -0.051    0.006   -8.411    0.000   -0.051   -0.341
+    age_death            0.004    0.001    4.083    0.000    0.004    0.266
+    msex                 0.005    0.007    0.659    0.510    0.005    0.024
+    apoe4               -0.022    0.008   -2.650    0.008   -0.022   -0.105
+    tissue               0.016    0.011    1.423    0.155    0.016    0.051
+    z_dnam              -0.009    0.007   -1.380    0.168   -0.009   -0.096
+    z_mtcn               0.015    0.004    4.066    0.000    0.015    0.160
+  gpath ~                                                                  
+    z_dnam               0.071    0.050    1.435    0.151    0.071    0.109
+    age_death            0.002    0.007    0.255    0.799    0.002    0.018
+    msex                -0.152    0.050   -3.044    0.002   -0.152   -0.113
+    apoe4                0.498    0.054    9.299    0.000    0.498    0.353
+    tissue              -0.048    0.075   -0.635    0.525   -0.048   -0.023
+    z_mtcn              -0.090    0.025   -3.599    0.000   -0.090   -0.142
+  z_mtcn ~                                                                 
+    z_dnam              -0.136    0.083   -1.653    0.098   -0.136   -0.133
+    age_death            0.011    0.012    0.956    0.339    0.011    0.073
+    msex                 0.077    0.090    0.850    0.395    0.077    0.036
+    apoe4               -0.437    0.096   -4.536    0.000   -0.437   -0.197
+    tissue              -0.088    0.129   -0.678    0.498   -0.088   -0.027
+  z_dnam ~                                                                 
+    libra               -0.020    0.012   -1.686    0.092   -0.020   -0.051
+    age_death            0.119    0.004   26.968    0.000    0.119    0.789
+    msex                -0.128    0.060   -2.115    0.034   -0.128   -0.062
+    apoe4                0.143    0.063    2.294    0.022    0.143    0.067
+    tissue               0.042    0.082    0.509    0.611    0.042    0.013
+
+Intercepts:
+                   Estimate  Std.Err  z-value  P(>|z|)   Std.lv  Std.all
+   .cogng_demg_slp   -0.342    0.088   -3.909    0.000   -0.342   -3.576
+   .gpath             0.609    0.627    0.972    0.331    0.609    0.958
+   .z_mtcn           -0.777    1.079   -0.720    0.471   -0.777   -0.776
+   .z_dnam          -10.586    0.405  -26.120    0.000  -10.586  -10.883
+
+Variances:
+                   Estimate  Std.Err  z-value  P(>|z|)   Std.lv  Std.all
+   .cogng_demg_slp    0.007    0.000   16.904    0.000    0.007    0.743
+   .gpath             0.325    0.019   17.285    0.000    0.325    0.804
+   .z_mtcn            0.951    0.059   16.217    0.000    0.951    0.949
+   .z_dnam            0.344    0.024   14.558    0.000    0.344    0.364
+
+> ## SEM Mediation Models 
+> 
+> sem_cov_mediation <- '
++   # Regression equations
++   # Cognitive decline regressed on gpath, z_dnam, z_mtcn, and covariates
++     cogng_demog_slope ~ b1*gpath + b2*z_dnam + b3*z_mtcn + b4*age_death + b5*msex + b6*apoe4 + b7*tissue
++ 
++   # Global AD pathology regressed on z_dnam, z_mtcn, and covariates
++     gpath ~ a1*z_dnam + a2*z_mtcn + a3*age_death + a4*msex + a5*apoe4 + a6*tissue
++ 
++   # mtDNA copy number regressed on z_dnam and covariates
++     z_mtcn ~ c1*z_dnam + c2*age_death + c3*msex + c4*apoe4 + c5*tissue
++ 
++   # DNAm age acceleration regressed on LIBRA score and covariates
++     z_dnam ~ d1*libra + d2*age_death + d3*msex + d4*apoe4 + d5*tissue
++ 
++   # Indirect effects
++   # Indirect effect of z_dnam on cognitive decline via gpath
++     indirect_zdnam_gpath_cog := a1 * b1
++ 
++   # Indirect effect of z_mtcn on cognitive decline via gpath
++     indirect_zmtcn_gpath_cog := a2 * b1
++ 
++   # Indirect effect of z_dnam on cognitive decline via z_mtcn
++     indirect_zdnam_mtcn_cog := c1 * b3
++ 
++   # Indirect effect of z_dnam on cognitive decline via z_mtcn and gpath
++     indirect_zdnam_mtcn_gpath_cog := c1 * a2 * b1
++ 
++   # Total indirect effect of z_dnam on cognitive decline
++     total_indirect_zdnam_cog := indirect_zdnam_gpath_cog + indirect_zdnam_mtcn_cog + indirect_zdnam_mtcn_gpath_cog
++ 
++   # Total effect of z_dnam on cognitive decline
++     total_effect_zdnam_cog := b2 + total_indirect_zdnam_cog
++ 
++ '
+> 
+> fit <- sem(model = sem_cov_mediation, data = rosmap.df, missing = 'ML') 
+Warning message:
+lavaan->lav_data_full():  
+   22 cases were deleted due to missing values in exogenous variable(s), while fixed.x = TRUE. 
+> summary(fit,standardized=TRUE)
+lavaan 0.6-19 ended normally after 90 iterations
+
+  Estimator                                         ML
+  Optimization method                           NLMINB
+  Number of model parameters                        31
+
+                                                  Used       Total
+  Number of observations                           604         626
+  Number of missing patterns                         8            
+
+Model Test User Model:
+                                                      
+  Test statistic                                 1.665
+  Degrees of freedom                                 3
+  P-value (Chi-square)                           0.645
+
+Parameter Estimates:
+
+  Standard errors                             Standard
+  Information                                 Observed
+  Observed information based on                Hessian
+
+Regressions:
+                      Estimate  Std.Err  z-value  P(>|z|)   Std.lv  Std.all
+  cogng_demog_slope ~                                                      
+    gpath     (b1)      -0.051    0.006   -8.411    0.000   -0.051   -0.341
+    z_dnam    (b2)      -0.009    0.007   -1.380    0.168   -0.009   -0.096
+    z_mtcn    (b3)       0.015    0.004    4.066    0.000    0.015    0.160
+    age_death (b4)       0.004    0.001    4.083    0.000    0.004    0.266
+    msex      (b5)       0.005    0.007    0.659    0.510    0.005    0.024
+    apoe4     (b6)      -0.022    0.008   -2.650    0.008   -0.022   -0.105
+    tissue    (b7)       0.016    0.011    1.423    0.155    0.016    0.051
+  gpath ~                                                                  
+    z_dnam    (a1)       0.071    0.050    1.435    0.151    0.071    0.109
+    z_mtcn    (a2)      -0.090    0.025   -3.599    0.000   -0.090   -0.142
+    age_death (a3)       0.002    0.007    0.255    0.799    0.002    0.018
+    msex      (a4)      -0.152    0.050   -3.044    0.002   -0.152   -0.113
+    apoe4     (a5)       0.498    0.054    9.299    0.000    0.498    0.353
+    tissue    (a6)      -0.048    0.075   -0.635    0.525   -0.048   -0.023
+  z_mtcn ~                                                                 
+    z_dnam    (c1)      -0.136    0.083   -1.653    0.098   -0.136   -0.133
+    age_death (c2)       0.011    0.012    0.956    0.339    0.011    0.073
+    msex      (c3)       0.077    0.090    0.850    0.395    0.077    0.036
+    apoe4     (c4)      -0.437    0.096   -4.536    0.000   -0.437   -0.197
+    tissue    (c5)      -0.088    0.129   -0.678    0.498   -0.088   -0.027
+  z_dnam ~                                                                 
+    libra     (d1)      -0.020    0.012   -1.686    0.092   -0.020   -0.051
+    age_death (d2)       0.119    0.004   26.968    0.000    0.119    0.789
+    msex      (d3)      -0.128    0.060   -2.115    0.034   -0.128   -0.062
+    apoe4     (d4)       0.143    0.063    2.294    0.022    0.143    0.067
+    tissue    (d5)       0.042    0.082    0.509    0.611    0.042    0.013
+
+Intercepts:
+                   Estimate  Std.Err  z-value  P(>|z|)   Std.lv  Std.all
+   .cogng_demg_slp   -0.342    0.088   -3.909    0.000   -0.342   -3.576
+   .gpath             0.609    0.627    0.972    0.331    0.609    0.958
+   .z_mtcn           -0.777    1.079   -0.720    0.471   -0.777   -0.776
+   .z_dnam          -10.586    0.405  -26.120    0.000  -10.586  -10.883
+
+Variances:
+                   Estimate  Std.Err  z-value  P(>|z|)   Std.lv  Std.all
+   .cogng_demg_slp    0.007    0.000   16.904    0.000    0.007    0.743
+   .gpath             0.325    0.019   17.285    0.000    0.325    0.804
+   .z_mtcn            0.951    0.059   16.217    0.000    0.951    0.949
+   .z_dnam            0.344    0.024   14.558    0.000    0.344    0.364
+
+Defined Parameters:
+                   Estimate  Std.Err  z-value  P(>|z|)   Std.lv  Std.all
+    indrct_zdnm_g_   -0.004    0.003   -1.422    0.155   -0.004   -0.037
+    indrct_zmtcn__    0.005    0.001    3.324    0.001    0.005    0.048
+    indrct_zdnm_m_   -0.002    0.001   -1.537    0.124   -0.002   -0.021
+    indrct_zdnm___   -0.001    0.000   -1.506    0.132   -0.001   -0.006
+    ttl_ndrct_zdn_   -0.006    0.003   -2.086    0.037   -0.006   -0.065
+    ttl_ffct_zdnm_   -0.016    0.007   -2.179    0.029   -0.016   -0.161
+
+>
+

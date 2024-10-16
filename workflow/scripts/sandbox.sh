@@ -5,6 +5,11 @@ scp sjfandrews@dt1.wynton.ucsf.edu:/wynton/group/andrews/users/sjfandrews/DNAm/i
 mamba env create -f workflow/envs/R.yaml
 
 
+## Softlink resources 
+ln -s /Users/sheaandrews/Library/CloudStorage/Box-Box/AndrewsLab/data/AMP-AD
+ln -s /Users/sheaandrews/Library/CloudStorage/Dropbox/Research/PostDoc-MSSM/mtDNAcn/data/AMPAD
+ln -s  /Users/sheaandrews/Library/CloudStorage/Dropbox/Research/PostDoc-MSSM/mtDNAcn/data/AMPAD_extra
+
 scp one_file.tsv alice@dt1.wynton.ucsf.edu:~/
 
 
