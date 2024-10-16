@@ -871,10 +871,11 @@ regression.out <- bind_rows(
                       ), 
     outcome = fct_relevel(outcome, 'Cog. Decline',"Glob AD Pathol.", 'mtDNAcn', 'DNAm'),
     signif_lab = case_when(
-      p.value < 0.05 ~ "Sig", 
-      p.value >= 0.05 & p.value < 0.1  ~ "Trend", 
+      p.value < 0.05 ~ "Sig.", 
+      p.value >= 0.05 & p.value < 0.1  ~ "Marg.", 
       p.value >= 0.1  ~ "NS.",
-    )
+    ), 
+     signif_lab = fct_relevel(signif_lab, 'NS.',"Marg.", 'Sig.'),
   )
 
 coeff.p <- ggplot(regression.out, aes(x = estimate, y = term, colour = signif_lab)) + 
@@ -893,11 +894,14 @@ coeff.p <- ggplot(regression.out, aes(x = estimate, y = term, colour = signif_la
     strip.background = element_blank(), 
     strip.text = element_text(face = 'bold'),
     axis.title.y = element_blank(), 
-    legend.position = 'none'
+    legend.position = 'bottom', 
+    legend.title = element_blank(), 
+    legend.box.spacing = unit(-10, "pt"), 
+    plot.margin = unit(c(0,0,0,0), "pt")
     )
 
-pg.w = 3; pg.h = 3.1
-# png('results/plots/Coeff.plot.png', width = pg.w, height = pg.h, units = "in", res = 300)
+pg.w = 2.5; pg.h = 3.1
+png('results/plots/Coeff_reg.plot.png', width = pg.w, height = pg.h, units = "in", res = 300)
 pageCreate(width = pg.w, height = pg.h, default.units = "inches")
 
 plotGG(
@@ -907,7 +911,7 @@ plotGG(
 )
 
 pageGuideHide()
-# dev.off()
+dev.off()
 
 
 ```
@@ -938,7 +942,7 @@ ExMedRes <- function(med_model, outcome, treat, mediator) {
 cog_gpath_mtcn.m <- lm(gpath ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
 cog_gpath_mtcn.y <- lm(cogng_demog_slope ~ z_mtcn + gpath + age_death + msex + apoe + tissue, data = rosmap.cc)
 
-cog_gpath_mtcn.med <- mediate(cog_gpath_mtcn.m, cog_gpath_mtcn.y, treat = "z_mtcn", mediator = "gpath", boot = T)
+cog_gpath_mtcn.med <- mediate(cog_gpath_mtcn.m, cog_gpath_mtcn.y, treat = "z_mtcn", mediator = "gpath", boot = T, sims = 5000)
 summary(cog_gpath_mtcn.med)
 cog_gpath_mtcn.df <- ExMedRes(cog_gpath_mtcn.med, 'cog', 'z_mtcn', 'gpath')
 
@@ -946,7 +950,7 @@ cog_gpath_mtcn.df <- ExMedRes(cog_gpath_mtcn.med, 'cog', 'z_mtcn', 'gpath')
 cog_gpath_dnam.m <- lm(gpath ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.cc)
 cog_gpath_dnam.y <- lm(cogng_demog_slope ~ z_dnam + gpath + age_death + msex + apoe + tissue, data = rosmap.cc)
 
-cog_gpath_dnam.med <- mediate(cog_gpath_dnam.m, cog_gpath_dnam.y, treat = "z_dnam", mediator = "gpath", boot = T)
+cog_gpath_dnam.med <- mediate(cog_gpath_dnam.m, cog_gpath_dnam.y, treat = "z_dnam", mediator = "gpath", boot = T, sims = 5000)
 summary(cog_gpath_dnam.med)
 cog_gpath_dnam.df <- ExMedRes(cog_gpath_dnam.med, 'cog', 'z_dnam', 'gpath')
 
@@ -970,7 +974,7 @@ gpath_dnam_mtcn.df <- ExMedRes(gpath_dnam_mtcn.med, 'gpath', 'z_mtcn', 'z_dnam')
 cog_mtcn_dnam.m <- lm(z_mtcn ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.cc)
 cog_mtcn_dnam.y <- lm(cogng_demog_slope ~ z_dnam + z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
 
-cog_mtcn_dnam.med <- mediate(cog_mtcn_dnam.m, cog_mtcn_dnam.y, treat = "z_dnam", mediator = "z_mtcn", boot = T)
+cog_mtcn_dnam.med <- mediate(cog_mtcn_dnam.m, cog_mtcn_dnam.y, treat = "z_dnam", mediator = "z_mtcn", boot = T, sims = 5000)
 summary(cog_mtcn_dnam.med)
 cog_mtcn_dnam.df <- ExMedRes(cog_mtcn_dnam.med, 'cog', 'z_dnam', 'z_mtcn')
 
@@ -999,10 +1003,18 @@ med.res <- bind_rows(
 ) %>%
   relocate(treat, mediator, outcome) %>%
   # filter(term %in% c('z_dnam', 'z_mtcn', 'gpath', 'libra')) %>%
-  mutate(signif = gtools::stars.pval(p.value))
+  mutate(
+    signif = gtools::stars.pval(p.value), 
+    estimate = round(estimate, 2), 
+    conf.low = round(conf.low, 3), 
+    conf.high = round(conf.high, 3), 
+    p.value = round(p.value, 3), 
+    out = glue::glue("{estimate} ({conf.low}, {conf.high}), P = {p.value}")
+   )
 
-med.res %>% 
-  filter(str_detect(term, 'Prop.'))
+
+med.res %>% filter(str_detect(term, 'Prop.')) 
+med.res %>% filter(outcome == "cog") 
 
 ```
 
@@ -1065,11 +1077,25 @@ sem_cov_mediation <- '
 '
 
 semMedi.fit <- sem(model = sem_cov_mediation, data = rosmap.df, missing = 'ML') 
-summary(semMedi.fit,standardized=TRUE)
+summary(semMedi.fit,standardized=TRUE, fit=TRUE )
 
 semPlot::semPaths(fit, whatLabels = "std", edge.label.cex = .5, layout = "tree2", rotation = 2, style = "lisrel", intercepts = FALSE, residuals = TRUE, curve = 1, curvature = 3, nCharNodes = 8, sizeMan = 6, sizeMan2 = 3, optimizeLatRes = TRUE, edge.color = "#000000")
 ```
 
+```{r}
+standardizedSolution(semMedi.fit) %>%
+  filter(op == "~") %>%
+  filter(rhs %in% c('z_dnam', 'z_mtcn', 'gpath', 'libra')) %>%
+    mutate(
+    signif = gtools::stars.pval(pvalue), 
+    est.std = round(est.std, 2), 
+    ci.lower = round(ci.lower, 3), 
+    ci.upper = round(ci.upper, 3), 
+    pvalue = round(pvalue, 3), 
+    out = glue::glue("{est.std} ({ci.lower}, {ci.upper}), P = {pvalue}")
+   )
+
+```
 
 ```{r}
 
