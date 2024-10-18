@@ -611,17 +611,18 @@ ggplot(libra, aes(x = adri, y = libra)) + geom_point()
 
 ### Epiclocks
 ```{r}
+rosmap.spec <- read_csv("resources/AMP-AD/rosmap/ROSMAP_biospecimen_metadata.csv")
 rosmap.dnam <- read_csv("resources/AMP-AD/rosmap/ROSMAP_assay_methylationArray_metadata.csv") %>%
-  left_join(rosmap.spec %>% select(specimenID, individualID, organ, tissue), by = "specimenID") %>%
+  left_join(rosmap.spec %>% dplyr::select(specimenID, individualID, organ, tissue), by = "specimenID") %>%
   relocate(individualID, .before = specimenID) %>%
   mutate(assay = "DNAm")
 
 cortical.raw <- read_csv('~/Dropbox/Research/UCSF/DNAm/intermediate/CorticalPred.csv') %>%
-  select(-'...1')
+  dplyr::select(-'...1')
 biolearn.raw <- read_csv('~/Dropbox/Research/UCSF/DNAm/intermediate/rosmap_epiclocks_241012.csv') %>%
   rename(specimenID = '...1' ) 
 
-epiclocks.rosmap <- left_join(biolearn.raw, select(cortical.raw, ID, brainpred), by = c("specimenID" = "ID")) %>%
+epiclocks.rosmap <- left_join(biolearn.raw, dplyr::select(cortical.raw, ID, brainpred), by = c("specimenID" = "ID")) %>%
   filter(!is.na(Age))
 
 epiclocks.rosmap %>%
@@ -644,10 +645,10 @@ round(cor(epiclocks.rosmap[,'Age'],epiclocks.rosmap[,'Horvath1']),2)
 ### mtDNAcn
 ```{r}
 mtdnacn.raw <- read_tsv("~/Dropbox/Research/PostDoc-MSSM/mtDNAcn/data/mosdepth_mtDNAcn_All.txt")
-wgsqc.raw <- read_csv("~/Dropbox/Research/PostDoc-MSSM/mtDNAcn/data/AMPAD_extra/rosmap/WGS_sample_QC_info.csv")
+wgsqc.raw <- read_csv("~/Dropbox/Research/PostDoc-MSSM/mtDNAcn/data/AMPAD_extra/rosmap/WGS_sample_QC_info.csv") 
 
 rosmap.wgsqc <- read_csv("resources/AMP-AD/rosmap/ROSMAP_assay_wholeGenomeSeq_metadata.csv") %>%
-  left_join(rosmap.spec %>% select(specimenID, individualID, organ, tissue), by = "specimenID") %>%
+  left_join(rosmap.spec %>% dplyr::select(specimenID, individualID, organ, tissue), by = "specimenID") %>%
   relocate(individualID, .before = specimenID)
 
 rosmap.mtdnacn <- left_join(wgsqc.raw, mtdnacn.raw, by = c("WGS_id" = "SampleID")) %>%
@@ -656,19 +657,30 @@ rosmap.mtdnacn <- left_join(wgsqc.raw, mtdnacn.raw, by = c("WGS_id" = "SampleID"
   filter(!str_detect(Source.Tissue.Type, 'Cerebellum')) %>%
   filter(!(projid == "44749170" & str_detect(Source.Tissue.Type, 'Cingulate'))) %>%
   filter(QC == 'Pass') %>%
-  select(projid, mt_coverage, autosomal_coverage, mtcn_avg)
+  dplyr::select(projid, mt_coverage, autosomal_coverage, mtcn_avg)
 
+```
+
+### nsSNVs
+
+```{r}
+rosmap_nsnvs.raw <- read_tsv("resources/nsSNVs/gatk.mutect.mosaicforecast.rosmap.chrall.pheno_pc_germline_risk_variant_genotypes_somatic_variant_burden.analysis.tsv", col_types = c('c'))
+
+rosmap_nsnvs <- rosmap_nsnvs.raw %>%
+  dplyr::select(projid, TOTAL_SOMATIC_VARIANT_COUNT, TOTAL_SOMATIC_VARIANT_LENGTH, 
+                TOTAL_SOMATIC_VARIANT_COUNT_LOG10, TOTAL_SOMATIC_VARIANT_LENGTH_LOG10)  %>%
+  mutate(projid = as.character(projid))
+                      
 ```
 
 ### Wrangling
 ```{r}
-rosmap.spec <- read_csv("resources/AMP-AD/rosmap/ROSMAP_biospecimen_metadata.csv")
 
 rosmap.clin <- read_csv("resources/AMP-AD/rosmap/ROSMAP_clinical.csv") %>%
   relocate(individualID)
 
 rosmap.pheno <- readxl::read_xlsx("resources/AMPAD_extra/rosmap/dataset_641_basic_04-29-2020.xlsx") %>%
-  left_join(rosmap.clin %>% select(individualID, projid, educ, race, spanish), by = "projid") %>%
+  left_join(rosmap.clin %>% dplyr::select(individualID, projid, educ, race, spanish), by = "projid") %>%
   mutate(
     dx = case_when(
       cogdx == 1 ~ "NCI", 
@@ -696,10 +708,10 @@ rosmap.pheno <- readxl::read_xlsx("resources/AMPAD_extra/rosmap/dataset_641_basi
 ```{r}
 
 rosmap.gen <- rosmap.wgsqc %>%
-  select(individualID, specimenID, assay, organ, tissue) %>%
-  left_join(rosmap.dnam %>% select(individualID, specimenID, assay, organ, tissue), 
+  dplyr::select(individualID, specimenID, assay, organ, tissue) %>%
+  left_join(rosmap.dnam %>% dplyr::select(individualID, specimenID, assay, organ, tissue), 
             by = 'individualID', suffix = c(".wgs", '.dnam')) %>%
-  left_join(rosmap.clin %>% select(individualID, projid), by = "individualID") %>%
+  left_join(rosmap.clin %>% dplyr::select(individualID, projid), by = "individualID") %>%
   left_join(rosmap.pheno, by = "projid") 
 
 cog_long <- cog_long.raw %>%
@@ -714,10 +726,12 @@ rosmap.df <- rosmap.gen %>%
   # filter(tissue.wgs %in% c("dorsolateral prefrontal cortex")) %>%
   # select(individualID, specimenID.wgs, specimenID.dnam, projid) %>%
   left_join(rosmap.mtdnacn, by = c("projid")) %>%
+  left_join(rosmap_nsnvs, by = c("projid")) %>%
   left_join(epiclocks.rosmap, by = c("specimenID.dnam" = "specimenID")) %>%
-  left_join(libra %>% dplyr::select(projid, adri, i_adri, libra),  by = c("projid")) %>%
+  left_join(libra %>% dplyr::select(projid, adri, i_adri, libra, bmi),  by = c("projid")) %>%
   left_join(rosmap_mcaide %>% dplyr::select(projid, mcaide),  by = c("projid")) %>%
-  left_join(cog.raw %>% dplyr::select(projid, cogng_demog_slope, cognep_demog_slope, educ),  by = c("projid")) %>%
+  left_join(cog.raw %>% dplyr::select(projid, cogng_demog_slope, cognep_demog_slope, cognps_demog_slope, educ),  
+            by = c("projid")) %>%
   left_join(cog_long %>% dplyr::select(projid, cogn_global, projid, cts_mmse30),  by = c("projid")) %>%
   mutate(
     amylsqrt = sqrt(amyloid),
@@ -762,10 +776,12 @@ gpath_libra.res <- lm(gpath ~ libra + age_death + msex + apoe + tissue, data = r
 
 ## mtDNAcn
 mtcn_dnam.res <- lm(z_mtcn ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(mtcn_dnam.res) 
+mtcn_gpath.res <- lm(z_mtcn ~ gpath + age_death + msex + apoe + tissue, data = rosmap.df); summary(mtcn_gpath.res) 
 mtcn_libra.res <- lm(z_mtcn ~ libra + age_death + msex + apoe + tissue, data = rosmap.df); summary(mtcn_libra.res) 
 
 ## dnam
 dnma_mtcn.res <- lm(z_dnam ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.df) ; summary(dnma_mtcn.res) 
+dnma_gpath.res <- lm(z_dnam ~ gpath + age_death + msex + apoe + tissue, data = rosmap.df) ; summary(dnma_gpath.res) 
 dnam_libra.res <- lm(z_dnam ~ libra + age_death + msex + apoe + tissue, data = rosmap.df) ; summary(dnam_libra.res) 
 
 ## Summary Table 
@@ -798,6 +814,21 @@ regresion.res
 ```{r}
 ## Other models
 
+## Cognition 
+cog_nssnvs.res <- lm(cogng_demog_slope ~ TOTAL_SOMATIC_VARIANT_COUNT_LOG10 + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_nssnvs.res) 
+cog_all.res <- lm(cogng_demog_slope ~ TOTAL_SOMATIC_VARIANT_COUNT + z_dnam + z_mtcn + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_all.res) 
+lm(cognps_demog_slope ~ libra + age_death + msex + apoe + tissue, data = rosmap.df) %>% summary() 
+
+
+## Global Pathology 
+gpath_nssnvs.res <- lm(gpath ~ TOTAL_SOMATIC_VARIANT_COUNT_LOG10 + age_death + msex + apoe + tissue, data = rosmap.df); summary(gpath_nssnvs.res) 
+
+## mtDNAcn
+mtcn_nssnvs.res <- lm(z_mtcn ~ TOTAL_SOMATIC_VARIANT_COUNT_LOG10 + age_death + msex + apoe + tissue, data = rosmap.df); summary(mtcn_nssnvs.res) 
+
+## dnam
+dnma_nssnvs.res <- lm(z_dnam ~ TOTAL_SOMATIC_VARIANT_COUNT_LOG10 + age_death + msex + apoe + tissue, data = rosmap.df) ; summary(dnma_nssnvs.res) 
+
 ## Dx 
 glm(dx ~ z_dnam + age_death + msex + apoe, data = rosmap.cc, family = "binomial") %>% summary()
 glm(dx ~ z_mtcn + age_death + msex + apoe, data = rosmap.cc, family = "binomial") %>% summary()
@@ -805,25 +836,25 @@ glm(dx ~ libra + age_death + msex + apoe, data = rosmap.cc, family = "binomial")
 # glm(dx ~ adri + age_death + msex + apoe, data = rosmap.cc, family = "binomial") %>% summary()
 glm(dx ~ gpath + age_death + msex + apoe, data = rosmap.cc, family = "binomial") %>% summary()
 
-## Cognition 
-# lm(cogn_global ~ z_dnam + age_death + msex + apoe + educ, data = rosmap.cc) %>% summary()
-# lm(cogn_global ~ z_mtcn + age_death + msex + apoe, data = rosmap.cc) %>% summary()
-# lm(cogn_global ~ libra + age_death + msex  + educ + apoe, data = rosmap.cc) %>% summary()
-# lm(cogn_global ~ gpath + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+## Cognition
+lm(cogn_global ~ z_dnam + age_death + msex + apoe + educ, data = rosmap.cc) %>% summary()
+lm(cogn_global ~ z_mtcn + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(cogn_global ~ libra + age_death + msex  + educ + apoe, data = rosmap.cc) %>% summary()
+lm(cogn_global ~ gpath + age_death + msex + apoe, data = rosmap.cc) %>% summary()
 
 ## amyloid
-# lm(amylsqrt ~ z_dnam + age_death + msex + apoe, data = rosmap.cc) %>% summary()
-# lm(amylsqrt ~ z_mtcn + age_death + msex + apoe, data = rosmap.cc) %>% summary()
-# lm(amylsqrt ~ libra + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(amylsqrt ~ z_dnam + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(amylsqrt ~ z_mtcn + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(amylsqrt ~ libra + age_death + msex + apoe, data = rosmap.cc) %>% summary()
 
 ## NFT
-# lm(nftsqrt ~ z_dnam + age_death + msex + apoe, data = rosmap.cc) %>% summary()
-# lm(nftsqrt ~ z_mtcn + age_death + msex + apoe, data = rosmap.cc) %>% summary()
-# lm(nftsqrt ~ libra + age_death + msex + apoe, data = rosmap.cc) %>% summary()
-# lm(nftsqrt ~ adri + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(nftsqrt ~ z_dnam + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(nftsqrt ~ z_mtcn + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(nftsqrt ~ libra + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(nftsqrt ~ adri + age_death + msex + apoe, data = rosmap.cc) %>% summary()
 
-# lm(z_mtcn ~ adri + pmi + age_death + msex + study, data = rosmap.cc) %>% summary()
-# lm(z_dnam ~ adri  + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(z_mtcn ~ adri + pmi + age_death + msex + study, data = rosmap.cc) %>% summary()
+lm(z_dnam ~ adri  + age_death + msex + apoe, data = rosmap.cc) %>% summary()
 
 
 ```
@@ -949,6 +980,14 @@ cog_gpath_mtcn.y <- lm(cogng_demog_slope ~ z_mtcn + gpath + age_death + msex + a
 cog_gpath_mtcn.med <- mediate(cog_gpath_mtcn.m, cog_gpath_mtcn.y, treat = "z_mtcn", mediator = "gpath", boot = T, sims = 5000)
 summary(cog_gpath_mtcn.med)
 cog_gpath_mtcn.df <- ExMedRes(cog_gpath_mtcn.med, 'cog', 'z_mtcn', 'gpath')
+
+##  path -> mtDNAcn -> cog 
+cog_mtcn_gpath.m <- lm(z_mtcn ~ gpath + age_death + msex + apoe + tissue, data = rosmap.cc)
+cog_mtcn_gpath.y <- lm(cogng_demog_slope ~ z_mtcn + gpath + age_death + msex + apoe + tissue, data = rosmap.cc)
+
+cog_mtcn_gpath.med <- mediate(cog_mtcn_gpath.m, cog_mtcn_gpath.y, treat = "gpath", mediator = "z_mtcn", boot = T, sims = 1000)
+summary(cog_mtcn_gpath.med)
+cog_mtcn_gpath.df <- ExMedRes(cog_mtcn_gpath.med, 'cog', 'gpath', 'z_mtcn')
 
 ## DNAm -> path -> cog 
 cog_gpath_dnam.m <- lm(gpath ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.cc)
