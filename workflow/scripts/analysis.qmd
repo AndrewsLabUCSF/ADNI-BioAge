@@ -50,12 +50,12 @@ Second-generation clocks are designed to predict health outcomes, morbidity, and
 -   [CausAge](https://www.nature.com/articles/s43587-023-00557-0): epigenome-wide Mendelian randomization, we identified CpG sites potentially causal for aging-related traits. We established a new framework to introduce causal information into epigenetic clocks, resulting in **DamAge** and **AdaptAge**---clocks that track detrimental and adaptive methylation changes, respectively. DamAge correlates with adverse outcomes, including mortality, while AdaptAge is associated with beneficial adaptations.
 
 ## ADNI
-
+### Phenotypes
 ```{r}
 ## Clinical
 merge.raw <- read_csv("resources/ADNI/ADNIMERGE_25Sep2023.csv")
 
-merge <- select(merge.raw, RID, PTID, COLPROT, ORIGPROT, VISCODE, EXAMDATE, EXAMDATE_bl, 
+merge <- dplyr::select(merge.raw, RID, PTID, COLPROT, ORIGPROT, VISCODE, EXAMDATE, EXAMDATE_bl, 
                 AGE, PTGENDER, PTEDUCAT, APOE4, PTRACCAT, PTETHCAT,
                 DX_bl, DX, CDRSB, ADAS13,
                 FDG, PIB, AV45, ABETA, TAU, PTAU, ADAS13, Hippocampus, WholeBrain) %>%
@@ -92,7 +92,7 @@ merge_bl <- merge %>%
   filter(VISCODE == 'bl')
   
 dx_lv <- merge %>%
-  select(RID, VISCODE, EXAMDATE, EXAMDATE_bl, years_since_baseline, age, DX) %>%
+  dplyr::select(RID, VISCODE, EXAMDATE, EXAMDATE_bl, years_since_baseline, age, DX) %>%
   # filter(RID %in% rids$RID) %>% 
   group_by(RID) %>% 
   fill(DX, .direction = "down") %>%
@@ -107,7 +107,7 @@ dx_lv %>%
   )
 
 csf <- merge %>%
-  select(RID, VISCODE, EXAMDATE, years_since_baseline, age, ABETA, TAU, PTAU) %>%
+  dplyr::select(RID, VISCODE, EXAMDATE, years_since_baseline, age, ABETA, TAU, PTAU) %>%
   # filter(RID %in% rids$RID) %>% 
   filter(!is.na(ABETA), !is.na(TAU), !is.na(PTAU)) %>%
   group_by(RID) %>% 
@@ -122,7 +122,7 @@ csf %>%
   )
 
 fdg <- merge %>%
-  select(RID, VISCODE, EXAMDATE, years_since_baseline, age, FDG) %>%
+  dplyr::select(RID, VISCODE, EXAMDATE, years_since_baseline, age, FDG) %>%
   # filter(RID %in% rids$RID) %>% 
   filter(!is.na(FDG)) %>%
   group_by(RID) %>% 
@@ -137,7 +137,7 @@ fdg %>%
   )
 
 av45 <- merge %>%
-  select(RID, VISCODE, EXAMDATE, years_since_baseline, age, AV45) %>%
+  dplyr::select(RID, VISCODE, EXAMDATE, years_since_baseline, age, AV45) %>%
   # filter(RID %in% rids$RID) %>% 
   filter(!is.na(AV45)) %>%
   group_by(RID) %>% 
@@ -152,7 +152,7 @@ av45 %>%
   )
 
 brain <- merge %>%
-  select(RID, EXAMDATE, years_since_baseline, age, WholeBrain, Hippocampus) %>%
+  dplyr::select(RID, EXAMDATE, years_since_baseline, age, WholeBrain, Hippocampus) %>%
   # filter(RID %in% rids$RID) %>% 
   filter(!is.na(WholeBrain), !is.na(Hippocampus)) %>%
   group_by(RID) %>% 
@@ -193,6 +193,7 @@ adni.t1 <- tbl_summary(merge_bl,
 
 A total of 649 ADNI participants hadmethylation data. Participants varied on the number of repeatDNA methylation measurements they had: 83 had only abaseline measurement; 121 had 2 measurements (baseline plus 1repeat), mean 14.5 months between measurements (SD = 7.06);407 had 3 measurements, mean 12.1 months between mea-surements (SD = 1.5); 29 had 4, mean 10.4 months betweenmeasurements (SD = 3.54); and 9 had 5, mean 12.5 monthsbetween measurements (SD = 2.25). [Sugden et al 2022](https://www.neurology.org/doi/10.1212/WNL.0000000000200898)
 
+### Methylation
 ```{r}
 ## Mythylation
 map.raw <- readxl::read_xlsx("resources/ADNI/ADNI_DNA_Methylation_SampleAnnotation_20170530.xlsx") %>%
@@ -201,7 +202,7 @@ clocks.raw <- read_csv("intermediate/adni_epiclocks_240826.csv") %>%
   rename(barcodes = '...1' ) 
 
 dnam.raw <- map.raw %>%
-  select(barcodes, RID, Phase,  Edate, DateDrawn, PlateNumber, Array) %>%
+  dplyr::select(barcodes, RID, Phase,  Edate, DateDrawn, PlateNumber, Array) %>%
   rename(Phase_methy = Phase,  Edate_methy = Edate, DateDrawn_methy = DateDrawn) %>%
   arrange(RID, Edate_methy, PlateNumber) %>%
   left_join(clocks.raw, by = 'barcodes') 
@@ -212,10 +213,11 @@ dnam <- dnam.raw %>%
   group_by(RID) %>%
   slice(1:3)%>%
   ungroup() %>%
-  select(-Age)
+  dplyr::select(-Age)
 
 ```
 
+### Telomeres
 ```{r}
 ## Telomere Ration
 ts.raw <- read_csv("resources/ADNI/TS_RATIO_ADJ_23Aug2024.csv")
@@ -232,6 +234,7 @@ ts <- ts.raw %>%
 
 At what time point was WGS done? I think ADNI GO/2 when new blood was collected https://www.sciencedirect.com/science/article/pii/S1552526015001776
 
+### Genetics
 ```{r}
 ## Genetics 
 gen.raw <- read_csv("resources/ADNI/APOE_GENETIC_27Aug2024.csv") %>%
@@ -243,7 +246,7 @@ apoe_wgs.raw <- vcfR::read.vcfR(apoe_wgs.path)
 apoe_wgs <- vcfR::vcfR2tidy(apoe_wgs.raw, format_fields = c("GT")) %>%
   magrittr::extract2('gt') %>%
   filter(POS %in% c("45411941", "45412079")) %>%
-  select(-ChromKey, -gt_GT) %>%
+  dplyr::select(-ChromKey, -gt_GT) %>%
   mutate(
     POS = ifelse(POS == 45412079, 'rs7412', 'rs429358'), 
     RID = sub("^0+", "", str_extract(Indiv, "\\d{4}$")), 
@@ -260,27 +263,28 @@ semi_join(gen.raw, apoe_wgs, by = c('PTID' = 'Indiv')) %>%
   count(PHASE, VISCODE2)
 ```
 
+### Merge
 ```{r}
 
 rids <- bind_rows(
-  select(ts, RID), 
-  select(dnam, RID)
+  dplyr::select(ts, RID), 
+  dplyr::select(dnam, RID)
 ) %>%
   distinct(RID)
 
 
 adni.raw <- merge %>%
-  left_join(select(apoe_wgs, -RID), by = c("PTID" = "Indiv")) %>%
-  left_join(dnam %>% select(-DateDrawn_methy, -Phase_methy),
+  left_join(dplyr::select(apoe_wgs, -RID), by = c("PTID" = "Indiv")) %>%
+  left_join(dnam %>% dplyr::select(-DateDrawn_methy, -Phase_methy),
             by = c('RID', 'EXAMDATE' = 'Edate_methy')) %>%
-  left_join(ts %>% select(-VISCODE, -VISCODE2, -update_stamp, -DATE_DRAWN, -DATE_RECEIVED, -PHASE), 
+  left_join(ts %>% dplyr::select(-VISCODE, -VISCODE2, -update_stamp, -DATE_DRAWN, -DATE_RECEIVED, -PHASE), 
             by = c('RID', 'EXAMDATE' = 'EXAM_DATE')) %>%
   semi_join(rids) 
   
 adni <- adni.raw %>% 
   filter(!is.na(PlateNumber) | !is.na(PLATE)) %>%
-  select(-DX) %>%
-  full_join(dx_lv %>% select(RID, VISCODE, EXAMDATE, EXAMDATE_bl, years_since_baseline, age, DX)) %>%
+  dplyr::select(-DX) %>%
+  full_join(dx_lv %>% dplyr::select(RID, VISCODE, EXAMDATE, EXAMDATE_bl, years_since_baseline, age, DX)) %>%
   arrange(RID, EXAMDATE) %>%
   relocate(DX, .after = DX_bl) %>%
   relocate(age, .after = AGE) %>%
@@ -312,8 +316,17 @@ adni %>%
     n_mth = sum(!is.na(CausAge)),
     n_tel = sum(!is.na(TS_RATIO)), 
     median_age = median(age),
-    iqr = IQR(age)
+    # iqr = IQR(age)
   ) 
+
+adni_dnam_bl <- adni %>%
+  filter(visit == 1) %>%
+  filter(!is.na(CausAge))
+
+```
+
+```{r}
+write_csv(adni, "intermediate/adni_gen.csv")
 
 ```
 
@@ -322,12 +335,12 @@ adni %>% count(is.na(CausAge))
 adni %>% count(is.na(TS_RATIO))
 
 test <- full_join(
-  select(dnam, RID, Edate_methy, CausAge), 
-  select(ts, RID, EXAM_DATE, TS_RATIO), 
+  dplyr::select(dnam, RID, Edate_methy, CausAge), 
+  dplyr::select(ts, RID, EXAM_DATE, TS_RATIO), 
   by = c('RID', 'Edate_methy' = 'EXAM_DATE'))
 
 dnam.raw <- map.raw %>%
-  select(barcodes, RID, Phase,  Edate, DateDrawn, PlateNumber, Array) %>%
+  dplyr::select(barcodes, RID, Phase,  Edate, DateDrawn, PlateNumber, Array) %>%
   rename(Phase_methy = Phase,  Edate_methy = Edate, DateDrawn_methy = DateDrawn) %>%
   arrange(RID, Edate_methy, PlateNumber) %>%
   left_join(, 
@@ -385,7 +398,7 @@ count(dnam, n())
 
 ```{r}
 ba <- dnam %>% 
-  select(barcodes, RID, Edate_methy, AGE, DX, CDRSB, Horvathv2, Hannum, Lin, PhenoAge, CausAge, DNAmGrimAgev2) %>%
+  dplyr::select(barcodes, RID, Edate_methy, AGE, DX, CDRSB, Horvathv2, Hannum, Lin, PhenoAge, CausAge, DNAmGrimAgev2) %>%
   group_by(RID) %>%
   slice_min(Edate_methy) %>%
   ungroup() %>%
@@ -433,8 +446,9 @@ ggplot(adni, aes(x = age, y = cohort, fill = factor(visit))) +
 
 ```
 
+### Regressions
 ```{r}
-lm(CDRSB ~ CausAge + AGE + PTGENDER + PTEDUCAT + APOE4 , data = dnam) %>%
+lm(ADAS13 ~ CausAge + AGE + PTGENDER + PTEDUCAT + APOE4, data = adni_dnam_bl) %>%
   summary()
 ```
 
@@ -664,7 +678,7 @@ rosmap.mtdnacn <- left_join(wgsqc.raw, mtdnacn.raw, by = c("WGS_id" = "SampleID"
 ### nsSNVs
 
 ```{r}
-rosmap_nsnvs.raw <- read_tsv("resources/nsSNVs/gatk.mutect.mosaicforecast.rosmap.chrall.pheno_pc_germline_risk_variant_genotypes_somatic_variant_burden.analysis.tsv", col_types = c('c'))
+rosmap_nsnvs.raw <- read_tsv("~/gitcode/R01_EAA/resources/nsSNVs/gatk.mutect.mosaicforecast.rosmap.chrall.pheno_pc_germline_risk_variant_genotypes_somatic_variant_burden.analysis.tsv", col_types = c('c'))
 
 rosmap_nsnvs <- rosmap_nsnvs.raw %>%
   dplyr::select(projid, TOTAL_SOMATIC_VARIANT_COUNT, TOTAL_SOMATIC_VARIANT_LENGTH, 
@@ -758,6 +772,10 @@ rosmap.cc <- rosmap.df %>%
   filter(complete.cases(.))
 
 
+```
+
+```{r}
+write_csv(rosmap.df, "intermediate/rosmap_gen.csv")
 ```
 
 ### Regression Models 
