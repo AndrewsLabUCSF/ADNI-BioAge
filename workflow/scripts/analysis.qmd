@@ -1017,7 +1017,7 @@ cog_gpath_dnam.df <- ExMedRes(cog_gpath_dnam.med, 'cog', 'z_dnam', 'gpath')
 
 ## DNAm -> mtDNAcn -> path 
 gpath_mtcn_dnam.m <- lm(z_mtcn ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.cc)
-gpath_mtcn_dnam.y <- lm(gpath ~ z_dnam + z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
+gpath_mtcn_dnam.y <- lm(gpath ~ z_dnam + z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc, sims = 1000)
 
 gpath_mtcn_dnam.med <- mediate(gpath_mtcn_dnam.m, gpath_mtcn_dnam.y, treat = "z_dnam", mediator = "z_mtcn", boot = T)
 summary(gpath_mtcn_dnam.med)
