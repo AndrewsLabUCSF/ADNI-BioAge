@@ -1,12 +1,13 @@
 ---
 title: "Untitled"
 format: html
-editor: visual
+editor: source
 editor_options: 
   chunk_output_type: console
 ---
 
 ## Import
+
 ```{r}
 library(tidyverse)
 library(lavaan)
@@ -50,7 +51,9 @@ Second-generation clocks are designed to predict health outcomes, morbidity, and
 -   [CausAge](https://www.nature.com/articles/s43587-023-00557-0): epigenome-wide Mendelian randomization, we identified CpG sites potentially causal for aging-related traits. We established a new framework to introduce causal information into epigenetic clocks, resulting in **DamAge** and **AdaptAge**---clocks that track detrimental and adaptive methylation changes, respectively. DamAge correlates with adverse outcomes, including mortality, while AdaptAge is associated with beneficial adaptations.
 
 ## ADNI
+
 ### Phenotypes
+
 ```{r}
 ## Clinical
 merge.raw <- read_csv("resources/ADNI/ADNIMERGE_25Sep2023.csv")
@@ -194,6 +197,7 @@ adni.t1 <- tbl_summary(merge_bl,
 A total of 649 ADNI participants hadmethylation data. Participants varied on the number of repeatDNA methylation measurements they had: 83 had only abaseline measurement; 121 had 2 measurements (baseline plus 1repeat), mean 14.5 months between measurements (SD = 7.06);407 had 3 measurements, mean 12.1 months between mea-surements (SD = 1.5); 29 had 4, mean 10.4 months betweenmeasurements (SD = 3.54); and 9 had 5, mean 12.5 monthsbetween measurements (SD = 2.25). [Sugden et al 2022](https://www.neurology.org/doi/10.1212/WNL.0000000000200898)
 
 ### Methylation
+
 ```{r}
 ## Mythylation
 map.raw <- readxl::read_xlsx("resources/ADNI/ADNI_DNA_Methylation_SampleAnnotation_20170530.xlsx") %>%
@@ -218,6 +222,7 @@ dnam <- dnam.raw %>%
 ```
 
 ### Telomeres
+
 ```{r}
 ## Telomere Ration
 ts.raw <- read_csv("resources/ADNI/TS_RATIO_ADJ_23Aug2024.csv")
@@ -235,6 +240,7 @@ ts <- ts.raw %>%
 At what time point was WGS done? I think ADNI GO/2 when new blood was collected https://www.sciencedirect.com/science/article/pii/S1552526015001776
 
 ### Genetics
+
 ```{r}
 ## Genetics 
 gen.raw <- read_csv("resources/ADNI/APOE_GENETIC_27Aug2024.csv") %>%
@@ -264,6 +270,7 @@ semi_join(gen.raw, apoe_wgs, by = c('PTID' = 'Indiv')) %>%
 ```
 
 ### Merge
+
 ```{r}
 
 rids <- bind_rows(
@@ -447,14 +454,16 @@ ggplot(adni, aes(x = age, y = cohort, fill = factor(visit))) +
 ```
 
 ### Regressions
+
 ```{r}
 lm(ADAS13 ~ CausAge + AGE + PTGENDER + PTEDUCAT + APOE4, data = adni_dnam_bl) %>%
   summary()
 ```
 
-
 ## ROSMAP
+
 ### LIBRA Risk score
+
 ```{r}
 # Dementia risk score 
 cog.raw <- readxl::read_xlsx("~/Library/CloudStorage/Box-Box/AndrewsLab/data/RUSH/1341/dataset_1341_basic_01-10-2024.xlsx") %>%
@@ -624,6 +633,7 @@ ggplot(libra, aes(x = adri, y = libra)) + geom_point()
 ```
 
 ### Epiclocks
+
 ```{r}
 rosmap.spec <- read_csv("resources/AMP-AD/rosmap/ROSMAP_biospecimen_metadata.csv")
 rosmap.dnam <- read_csv("resources/AMP-AD/rosmap/ROSMAP_assay_methylationArray_metadata.csv") %>%
@@ -657,6 +667,7 @@ round(cor(epiclocks.rosmap[,'Age'],epiclocks.rosmap[,'Horvath1']),2)
 ```
 
 ### mtDNAcn
+
 ```{r}
 mtdnacn.raw <- read_tsv("~/Dropbox/Research/PostDoc-MSSM/mtDNAcn/data/mosdepth_mtDNAcn_All.txt")
 wgsqc.raw <- read_csv("~/Dropbox/Research/PostDoc-MSSM/mtDNAcn/data/AMPAD_extra/rosmap/WGS_sample_QC_info.csv") 
@@ -688,6 +699,7 @@ rosmap_nsnvs <- rosmap_nsnvs.raw %>%
 ```
 
 ### Wrangling
+
 ```{r}
 
 rosmap.clin <- read_csv("resources/AMP-AD/rosmap/ROSMAP_clinical.csv") %>%
@@ -778,8 +790,10 @@ rosmap.cc <- rosmap.df %>%
 write_csv(rosmap.df, "intermediate/rosmap_gen.csv")
 ```
 
-### Regression Models 
+### Regression Models
+
 #### Main Effects
+
 ```{r, mediation}
 ## Cognition 
 cog_dnam.res <- lm(cogng_demog_slope ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_dnam.res) 
@@ -827,7 +841,6 @@ regresion.res <- bind_rows(
 regresion.res 
 
 ```
-
 
 ```{r}
 ## Other models
@@ -878,6 +891,7 @@ lm(z_dnam ~ adri  + age_death + msex + apoe, data = rosmap.cc) %>% summary()
 ```
 
 #### Interactions
+
 ```{r}
 ## interactions
 cog_dnam_mtcn_int.res <- lm(cogng_demog_slope ~ z_mtcn*z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_dnam_mtcn_int.res)
@@ -891,6 +905,7 @@ gpath_mtcn_libra_int.res <- lm(gpath ~ libra*z_mtcn + age_death + msex + apoe + 
 ```
 
 #### Plots & Tables
+
 ```{r}
 
 regression.out <- bind_rows(
@@ -969,7 +984,8 @@ dev.off()
 
 ```
 
-### Mediation Models 
+### Mediation Models
+
 ```{r}
 
 ExMedRes <- function(med_model, outcome, treat, mediator) {
@@ -1081,8 +1097,8 @@ write_csv(med.res, 'results/mediation_results.csv')
 
 ```
 
+### SEM
 
-### SEM 
 ```{r}
 
 sem_cov <- ' 
@@ -1232,34 +1248,3 @@ semPlot::semPaths(fit,
 
 
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

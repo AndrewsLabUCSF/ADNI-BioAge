@@ -1,0 +1,245 @@
+---
+title: "TL_DNAm_data"
+format: html
+editor: source
+editor_options: 
+  chunk_output_type: console
+---
+## Import
+
+```{r}
+library(tidyverse)
+library(broom)
+library(plotgardener)
+
+setwd("~/gitcode/DNAm")
+`%nin%` = negate(`%in%`) 
+```
+
+## Munge
+
+### Endophenotypes
+
+```{r}
+cog.raw <- read_csv("resources/ADNI/ADSP-PHC/Assessment_Analyses/ADSP_ADNI_Cognition_Dec2023/ADSP_PHC_COGN_Dec2023.csv")
+fluid_bm <- read_csv("resources/ADNI/ADSP-PHC/Biospecimen_Analyses/ADSP_PHC_CSF_Dec2023.csv")
+
+dx_bl <- filter(cog.merge, PHC_Visit == 1) %>% 
+    mutate(
+    dx_bl = case_when(
+      PHC_Diagnosis == "1" ~ "CN", 
+      PHC_Diagnosis == "2" ~ "MCI", 
+      PHC_Diagnosis == "3" ~ "AD", 
+     ), 
+    dx_bl = fct_relevel(dx_bl, "CN", "MCI", "AD"), 
+  ) %>%
+    select(RID, dx_bl)
+
+
+```
+
+### Methylation
+
+```{r}
+## Mythylation
+map.raw <- readxl::read_xlsx("resources/ADNI/ADNI_DNA_Methylation_SampleAnnotation_20170530.xlsx") %>%
+  mutate(Edate = as.Date(Edate))
+clocks.raw <- read_csv("intermediate/adni_epiclocks_240826.csv") %>%
+  rename(barcodes = '...1' ) 
+
+dnam.raw <- map.raw %>%
+  dplyr::select(barcodes, RID, Phase,  Edate, DateDrawn, PlateNumber, Array) %>%
+  rename(Phase_methy = Phase,  Edate_methy = Edate, DateDrawn_methy = DateDrawn) %>%
+  arrange(RID, Edate_methy, PlateNumber) %>%
+  left_join(clocks.raw, by = 'barcodes') 
+
+dnam <- dnam.raw %>% 
+  group_by(RID, Edate_methy) %>%
+  distinct(RID, .keep_all = T) %>%
+  group_by(RID) %>%
+  slice(1:3)%>%
+  ungroup() %>%
+  dplyr::select(-Age)
+
+```
+
+### Telomeres
+- TL_BP_ADJ: Telomere length / Single copy gene (T/S) ratio of DNA from blood, adjusted for logistical confounders
+
+```{r}
+## Telomere Ration
+ts.raw <- read_csv("resources/ADNI/TS_RATIO_ADJ_23Aug2024.csv")
+
+ts <- ts.raw %>% 
+  arrange(RID, EXAM_DATE) %>%
+  group_by(RID, EXAM_DATE) %>%
+  distinct(RID, .keep_all = T) %>%
+  group_by(RID) %>%
+  slice(1:3) %>%
+  ungroup() 
+  
+```
+
+### APOE
+
+```{r}
+## APOE 
+apoe <- apoe.raw %>%
+  unite(apoe_geno, c(APGEN1, APGEN2), sep = "") %>%
+  mutate(
+    apoe = case_when(
+      apoe_geno == "22" ~ "e2+", 
+      apoe_geno == "23" ~ "e2+", 
+      apoe_geno == "24" ~ "e4+", 
+      apoe_geno == "33" ~ "e3/e3", 
+      apoe_geno == "34" ~ "e4+", 
+      apoe_geno == "44" ~ "e4+", 
+    ), 
+    apoe = fct_relevel(apoe, "e3/e3"), 
+  ) %>%
+   fastDummies::dummy_cols(select_columns = "apoe", remove_most_frequent_dummy = T) %>%
+  rename(apoe_e2 = `apoe_e2+`, apoe_e4 = `apoe_e4+`)
+  
+ 
+```
+
+## Merge 
+```{r}
+## APOE 
+tl.merge <- ts %>% select(RID, EXAM_DATE, TL_BP_ADJ)
+dnam.merge <- dnam %>% select(RID, Edate_methy, CausAge, DamAge, AdaptAge)
+apoe.merge <- apoe %>% select(RID, apoe_geno, apoe, apoe_e2, apoe_e4)
+cog.merge <- cog.raw %>% 
+  filter(RID %in% tl.merge$RID) %>%
+  select(RID, VISCODE2, EXAMDATE, PHC_Visit, PHC_Sex, PHC_Education, PHC_Ethnicity, PHC_Race, PHC_Age_Cognition, PHC_Diagnosis, 
+         PHC_MEM, PHC_EXF, PHC_LAN, PHC_VSP)
+
+ 
+genetics <- tl.merge %>% 
+  left_join(dnam.merge, by = c("RID", 'EXAM_DATE' = 'Edate_methy'))  %>% 
+  left_join(apoe.merge, by = c("RID")) 
+
+genetics_bl <- genetics %>%
+  group_by(RID) %>%
+  slice_min(EXAM_DATE) %>%
+  ungroup() %>%
+  mutate(
+    z_tl_bl = scale(TL_BP_ADJ)[,1] 
+  ) %>%
+  select(RID, tl_bl = TL_BP_ADJ, z_tl_bl, causage_bl = CausAge)
+
+## Might need to filter this to omics bl
+mean_age <- filter(cog.merge, PHC_Visit == 1) %>% summarise(age = mean(PHC_Age_Cognition)) %>% pull(age)
+
+adni <- cog.merge %>%
+  # left_join(dx_bl, by = c("RID")) %>%
+  # left_join(genetics_bl, by = c("RID")) %>%
+  left_join(genetics, by = c("RID", 'EXAMDATE' = "EXAM_DATE")) %>%
+  mutate(
+    age_c = PHC_Age_Cognition - mean_age, 
+    sex = ifelse(PHC_Sex == 1, "Male", "Female")
+  ) %>%
+  group_by(RID) %>%
+  mutate(
+    dx_bl = case_when(
+      PHC_Visit == min(PHC_Visit) ~ PHC_Diagnosis
+      ), 
+     tl_bl = case_when(
+      PHC_Visit == min(PHC_Visit[!is.na(TL_BP_ADJ)]) ~ TL_BP_ADJ
+      ),
+    causage_bl = case_when(
+      PHC_Visit == min(PHC_Visit[!is.na(CausAge)]) ~ CausAge
+      ),
+    ) %>%
+  ungroup() %>%
+  mutate(
+   dx_bl = case_when(
+     dx_bl == 1 ~ "CN",
+     dx_bl == 2 ~ "MCI",
+     dx_bl == 3 ~ "AD",
+   ),
+   dx_bl = fct_relevel(dx_bl, "CN", "MCI", "AD"), 
+   z_tl_bl = scale(tl_bl)[,1]
+  ) %>%
+  group_by(RID) %>%
+  fill(dx_bl, .direction = "down") %>%
+  fill(tl_bl, .direction = "down") %>%
+  fill(causage_bl, .direction = "down") %>%
+  fill(z_tl_bl, .direction = "down") %>%
+  fill(apoe, .direction = "updown") %>%
+  fill(apoe, .direction = "down") %>%
+  filter(!is.na(apoe)) %>%
+  filter(!is.na(CausAge)) %>%
+  ungroup() %>%
+  rename(
+    educ = PHC_Education
+  )
+
+
+```
+
+
+```{r}
+
+library(lme4)
+library(lmerTest)
+
+fitlmer.00 <- lmer(PHC_MEM ~ age_c + (age_c  | RID), REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.00)
+
+fitlmer.01 <- lmer(PHC_MEM ~ age_c + sex + educ + apoe + dx_bl + (age_c  | RID), REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.01)
+
+fitlmer.02 <- lmer(PHC_MEM ~ age_c + sex + educ + apoe + z_tl_bl + causage_bl + (age_c  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.02)
+
+fitlmer.03 <- lmer(PHC_VSP ~ age_c + sex + educ + apoe*age_c + z_tl_bl*age_c + causage_bl*age_c + (age_c  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03)
+
+fitlmer.04 <- lmer(PHC_MEM ~ age_c + sex + educ + z_tl_bl*apoe*age_c + (age_c  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.04)
+
+
+fitlmer.05 <- lmer(
+  PHC_MEM ~ age_c + sex + educ + apoe * age_c + 
+    TL_BP_ADJ * age_c + CausAge * age_c + 
+    (age_c + TL_BP_ADJ + CausAge | RID), 
+  REML = FALSE, 
+  control = lmerControl(optimizer = "Nelder_Mead"), 
+  data = adni
+)
+
+summary(fitlmer.05)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
