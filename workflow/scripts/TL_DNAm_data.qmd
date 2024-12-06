@@ -110,7 +110,7 @@ tl.merge <- ts %>% select(RID, EXAM_DATE, TL_BP_ADJ)
 dnam.merge <- dnam %>% select(RID, Edate_methy, CausAge, DamAge, AdaptAge)
 apoe.merge <- apoe %>% select(RID, apoe_geno, apoe, apoe_e2, apoe_e4)
 cog.merge <- cog.raw %>% 
-  filter(RID %in% tl.merge$RID) %>%
+  # filter(RID %in% tl.merge$RID) %>%
   select(RID, VISCODE2, EXAMDATE, PHC_Visit, PHC_Sex, PHC_Education, PHC_Ethnicity, PHC_Race, PHC_Age_Cognition, PHC_Diagnosis, 
          PHC_MEM, PHC_EXF, PHC_LAN, PHC_VSP)
 
@@ -140,6 +140,8 @@ adni <- cog.merge %>%
     sex = ifelse(PHC_Sex == 1, "Male", "Female")
   ) %>%
   group_by(RID) %>%
+  filter(any(!is.na(TL_BP_ADJ))) %>%
+  filter(any(!is.na(CausAge))) %>%
   mutate(
     dx_bl = case_when(
       PHC_Visit == min(PHC_Visit) ~ PHC_Diagnosis
@@ -194,7 +196,7 @@ fitlmer.02 <- lmer(PHC_MEM ~ age_c + sex + educ + apoe + z_tl_bl + causage_bl + 
                    REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
 summary(fitlmer.02)
 
-fitlmer.03 <- lmer(PHC_VSP ~ age_c + sex + educ + apoe*age_c + z_tl_bl*age_c + causage_bl*age_c + (age_c  | RID), 
+fitlmer.03 <- lmer(PHC_MEM ~ age_c + sex + educ + apoe*age_c + z_tl_bl*age_c + causage_bl*age_c + (age_c  | RID), 
                    REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
 summary(fitlmer.03)
 
