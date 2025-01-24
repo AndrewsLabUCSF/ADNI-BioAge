@@ -45,6 +45,9 @@ adni_dunedinpoam38 = gallery.get("DunedinPoAm38").predict(imputed_dataset)
 adni_dunedinpace = gallery.get("DunedinPACE").predict(imputed_dataset)
 adni_grimagev1 = gallery.get("GrimAgeV1").predict(imputed_dataset)
 adni_grimagev2 = gallery.get("GrimAgeV2").predict(imputed_dataset)
+adni_DeconvoluteBloodEPIC = gallery.get("DeconvoluteBloodEPIC").predict(imputed_dataset)
+adni_TwelveCellDeconvoluteBloodEPIC = gallery.get("TwelveCellDeconvoluteBloodEPIC").predict(imputed_dataset)
+adni_AD_BahadoSingh = gallery.get("AD_Bahado-Singh").predict(imputed_dataset)
 
 actual_age = metadata['age']
 plot_data = pd.DataFrame({
@@ -68,7 +71,7 @@ plot_data = pd.DataFrame({
 })
 
 ## Export 
-plot_data.to_csv("intermediate/adni_epiclocks_240826.csv", sep=',', na_rep='', index=True)
+plot_data.to_csv("intermediate/adni_epiclocks_250123.csv", sep=',', na_rep='', index=True)
 
 # plot_data.index=plot_data['Age']
 
