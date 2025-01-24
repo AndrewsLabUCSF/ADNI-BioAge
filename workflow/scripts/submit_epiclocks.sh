@@ -12,7 +12,7 @@
 
 conda activate r_dnam
 
-python workflow/scripts/run_epiclocks.py
+python workflow/scripts/epi_clocks.py
 
 # date
 # hostname
