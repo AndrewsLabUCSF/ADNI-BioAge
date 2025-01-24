@@ -4,9 +4,22 @@ scp sjfandrews@dt1.wynton.ucsf.edu:/wynton/group/andrews/users/sjfandrews/DNAm/i
 scp sjfandrews@dt1.wynton.ucsf.edu:/wynton/group/andrews/users/sjfandrews/DNAm/intermediate/master_sheet_cell-types_85bsc.csv ~/Downloads
 mamba env create -f workflow/envs/R.yaml
 
+scp sjfandrews@dt1.wynton.ucsf.edu:/yokoyama/seqdata/afrprs/PRScsx/work/adgc/adgc_META_pst_eff_a1_b0.5_phiauto_chrAll_noAPOE.txt ~/Downloads
+
 
 scp one_file.tsv alice@dt1.wynton.ucsf.edu:~/
 
+if isinstance(imputed_dataset.metadata, pd.DataFrame):
+    # Calculate missing data count per sample (column)
+    missing_data_counts = imputed_dataset.metadata.isnull().sum()
+    
+    # Filter samples (columns) with more than 0 missing values
+    samples_with_missing_data = missing_data_counts[missing_data_counts > 0]
+    
+    # Print the samples with more than 0 missing values
+    print("Samples with missing data:")
+    print(samples_with_missing_data)
+    
 
 if isinstance(data.dnam, pd.DataFrame):
     print(data.metadata.head())
