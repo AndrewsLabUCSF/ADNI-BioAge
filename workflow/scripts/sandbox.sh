@@ -7,6 +7,11 @@ mamba env create -f workflow/envs/R.yaml
 scp sjfandrews@dt1.wynton.ucsf.edu:/yokoyama/seqdata/afrprs/PRScsx/work/adgc/adgc_META_pst_eff_a1_b0.5_phiauto_chrAll_noAPOE.txt ~/Downloads
 
 
+## Softlink resources 
+ln -s /Users/sheaandrews/Library/CloudStorage/Box-Box/AndrewsLab/data/AMP-AD
+ln -s /Users/sheaandrews/Library/CloudStorage/Dropbox/Research/PostDoc-MSSM/mtDNAcn/data/AMPAD
+ln -s  /Users/sheaandrews/Library/CloudStorage/Dropbox/Research/PostDoc-MSSM/mtDNAcn/data/AMPAD_extra
+
 scp one_file.tsv alice@dt1.wynton.ucsf.edu:~/
 
 if isinstance(imputed_dataset.metadata, pd.DataFrame):

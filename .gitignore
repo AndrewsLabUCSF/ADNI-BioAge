@@ -48,8 +48,6 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 
-resources/
-intermediate/
 logs/
 results/
 .snakemake/
