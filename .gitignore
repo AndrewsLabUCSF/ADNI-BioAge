@@ -49,6 +49,6 @@ po/*~
 rsconnect/
 
 logs/
-results/
+# results/
 .snakemake/
 bin/

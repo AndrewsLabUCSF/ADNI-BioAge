@@ -49,12 +49,22 @@ map.raw <- readxl::read_xlsx("resources/ADNI/ADNI_DNA_Methylation_SampleAnnotati
   mutate(Edate = as.Date(Edate))
 clocks.raw <- read_csv("intermediate/adni_epiclocks_240826.csv") %>%
   rename(barcodes = '...1' ) 
+deconv6.raw <- read_csv("intermediate/DeconvoluteBloodEPIC_results.csv") %>%
+  rename(barcodes = '...1' ) %>%
+  pivot_longer(cols = -barcodes, names_to = "Sample", values_to = "Value") %>%
+  pivot_wider(names_from = barcodes, values_from = Value)
+deconv12.raw <- read_csv("intermediate/TwelveCellDeconvoluteBloodEPIC_results.csv") %>%
+  rename(barcodes = '...1' ) %>%
+  pivot_longer(cols = -barcodes, names_to = "Sample", values_to = "Value") %>%
+  pivot_wider(names_from = barcodes, values_from = Value)
 
 dnam.raw <- map.raw %>%
   dplyr::select(barcodes, RID, Phase,  Edate, DateDrawn, PlateNumber, Array) %>%
   rename(Phase_methy = Phase,  Edate_methy = Edate, DateDrawn_methy = DateDrawn) %>%
   arrange(RID, Edate_methy, PlateNumber) %>%
   left_join(clocks.raw, by = 'barcodes') %>%
+  left_join(deconv6.raw, by = c('barcodes' = 'Sample')) %>%
+  # left_join(deconv12.raw, by = c('barcodes' = 'Sample')) %>%
   left_join(select(cog.raw, RID, EXAMDATE, PHC_Age_Cognition, PHC_Sex, PHC_Diagnosis), by = c("RID", 'Edate_methy' = "EXAMDATE")) %>%
   relocate(RID, Edate_methy, PHC_Age_Cognition, PHC_Sex, PHC_Diagnosis) %>%
   select(-Age) %>%
@@ -76,7 +86,6 @@ dnam <- dnam.raw %>%
   dplyr::select(-Age)
 
 ```
-
 
 ### Telomeres
 - TL_BP_ADJ: Telomere length / Single copy gene (T/S) ratio of DNA from blood, adjusted for logistical confounders
@@ -123,8 +132,12 @@ apoe <- apoe.raw %>%
 ```{r}
 ## APOE 
 tl.merge <- ts %>% select(RID, EXAM_DATE, TL_BP_ADJ)
-dnam.merge <- dnam %>% select(RID, Edate_methy, PhenoAge, Horvathv2, Hannum, Lin, DNAmGrimAgev2, AgeAccelGrimv2,
-  CausAge,  DamAge, AdaptAge, DunedinPACE)
+dnam.merge <- dnam %>% select(
+  RID, Edate_methy, 
+  PhenoAge, Horvathv2, Hannum, Lin, DNAmGrimAgev2, AgeAccelGrimv2, CausAge,  DamAge, AdaptAge, DunedinPACE, 
+  neutrophil, nk_cell, b_cell, cd4_t_cell, cd8_t_cell, monocyte, 
+  # Bas, Bmem, Bnv, CD4mem, CD4nv, CD8mem, CD8nv, Eos, Mono, NK, Neu, Treg
+  )
 apoe.merge <- apoe %>% select(RID, apoe_geno, apoe, apoe_e2, apoe_e4)
 cog.merge <- cog.raw %>% 
   # filter(RID %in% tl.merge$RID) %>%
@@ -140,7 +153,11 @@ genetics <- tl.merge %>%
 
 epi_age_acc <- cog.merge %>% 
   left_join(genetics, by = c("RID", 'EXAMDATE' = "EXAM_DATE")) %>%
-  select(RID, PHC_Visit, EXAMDATE, PHC_Age_Cognition, CausAge, DamAge, AdaptAge, PhenoAge, Horvathv2, Hannum, Lin, DNAmGrimAgev2) %>%
+  select(RID, PHC_Visit, EXAMDATE, PHC_Age_Cognition, 
+        CausAge, DamAge, AdaptAge, PhenoAge, Horvathv2, Hannum, Lin, DNAmGrimAgev2, 
+        neutrophil, nk_cell, b_cell, cd4_t_cell, cd8_t_cell, monocyte
+        # Bas, Bmem, Bnv, CD4mem, CD4nv, CD8mem, CD8nv, Eos, Mono, NK, Neu, Treg
+        ) %>%
   filter(!is.na(CausAge)) %>%
   group_by(RID) %>%
   slice_min(EXAMDATE) %>%
@@ -153,6 +170,26 @@ raa_horvath_mod <- lm(Horvathv2 ~ PHC_Age_Cognition, data = epi_age_acc)
 raa_hannum_mod <- lm(Hannum ~ PHC_Age_Cognition, data = epi_age_acc)
 raa_lin_mod <- lm(Lin ~ PHC_Age_Cognition, data = epi_age_acc)
 raa_grimage_mod <- lm(DNAmGrimAgev2 ~ PHC_Age_Cognition, data = epi_age_acc)
+
+iraa_causage_mod <- lm(CausAge ~ PHC_Age_Cognition + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell, data = epi_age_acc)
+iraa_phenoage_mod <- lm(PhenoAge ~ PHC_Age_Cognition + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell, data = epi_age_acc)
+iraa_horvath_mod <- lm(Horvathv2 ~ PHC_Age_Cognition + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell, data = epi_age_acc)
+iraa_hannum_mod <- lm(Hannum ~ PHC_Age_Cognition + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell, data = epi_age_acc)
+iraa_lin_mod <- lm(Lin ~ PHC_Age_Cognition + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell, data = epi_age_acc)
+iraa_grimage_mod <- lm(DNAmGrimAgev2 ~ PHC_Age_Cognition + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell, data = epi_age_acc)
+
+# iraa_causage_mod <- lm(CausAge ~ PHC_Age_Cognition +  Bas + Bmem + Bnv + CD4mem + CD4nv + CD8mem + CD8nv + Eos + NK + Neu + Treg, 
+#   data = epi_age_acc)
+# iraa_phenoage_mod <- lm(PhenoAge ~ PHC_Age_Cognition +  Bas + Bmem + Bnv + CD4mem + CD4nv + CD8mem + CD8nv + Eos + NK + Neu + Treg, 
+#   data = epi_age_acc)
+# iraa_horvath_mod <- lm(Horvathv2 ~ PHC_Age_Cognition +  Bas + Bmem + Bnv + CD4mem + CD4nv + CD8mem + CD8nv + Eos + NK + Neu + Treg, 
+#   data = epi_age_acc)
+# iraa_hannum_mod <- lm(Hannum ~ PHC_Age_Cognition +  Bas + Bmem + Bnv + CD4mem + CD4nv + CD8mem + CD8nv + Eos + NK + Neu + Treg, 
+#   data = epi_age_acc)
+# iraa_lin_mod <- lm(Lin ~ PHC_Age_Cognition +  Bas + Bmem + Bnv + CD4mem + CD4nv + CD8mem + CD8nv + Eos + NK + Neu + Treg, 
+#   data = epi_age_acc)
+# iraa_grimage_mod <- lm(DNAmGrimAgev2 ~ PHC_Age_Cognition +  Bas + Bmem + Bnv + CD4mem + CD4nv + CD8mem + CD8nv + Eos + NK + Neu + Treg, 
+#   data = epi_age_acc)
 
 raa_mod <- list(
   CausAge = raa_causage_mod, 
@@ -177,6 +214,13 @@ epi_age_acc$horvath_raa_bl <- residuals(raa_horvath_mod)
 epi_age_acc$hannum_raa_bl <- residuals(raa_hannum_mod)
 epi_age_acc$lin_raa_bl <- residuals(raa_lin_mod)
 epi_age_acc$grimage_raa_bl <- residuals(raa_grimage_mod)
+
+epi_age_acc$causage_iraa_bl <- residuals(iraa_causage_mod)
+epi_age_acc$phenoage_iraa_bl <- residuals(iraa_phenoage_mod)
+epi_age_acc$horvath_iraa_bl <- residuals(iraa_horvath_mod)
+epi_age_acc$hannum_iraa_bl <- residuals(iraa_hannum_mod)
+epi_age_acc$lin_iraa_bl <- residuals(iraa_lin_mod)
+epi_age_acc$grimage_iraa_bl <- residuals(iraa_grimage_mod)
 
 ## Might need to filter this to omics bl
 mean_age <- filter(cog.merge, PHC_Visit == 1) %>% summarise(age = mean(PHC_Age_Cognition, na.rm = T)) %>% pull(age)
@@ -292,6 +336,12 @@ adni <- cog.merge %>%
   fill(hannum_raa_bl, .direction = "down") %>%
   fill(lin_raa_bl, .direction = "down") %>%
   fill(grimage_raa_bl, .direction = "down") %>%
+  fill(causage_iraa_bl, .direction = "down") %>%
+  fill(phenoage_iraa_bl, .direction = "down") %>%
+  fill(horvath_iraa_bl, .direction = "down") %>%
+  fill(hannum_iraa_bl, .direction = "down") %>%
+  fill(lin_iraa_bl, .direction = "down") %>%
+  fill(grimage_iraa_bl, .direction = "down") %>%
   fill(z_tl_bl, .direction = "down") %>%
   fill(apoe, .direction = "updown") %>%
   fill(apoe, .direction = "down") %>%
@@ -509,28 +559,47 @@ library(lmerTest)
 fitlmer.00 <- lmer(PHC_MEM ~ age_c + (age_c  | RID), REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
 summary(fitlmer.00)
 
-fitlmer.01 <- lmer(PHC_MEM ~ age_c + sex + educ + apoe + dx_bl + (age_c  | RID), REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+fitlmer.01 <- lmer(PHC_MEM ~ age_c + sex + educ + apoe + dx_bl + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell + (age_c  | RID), REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
 summary(fitlmer.01)
 
-fitlmer.02 <- lmer(PHC_MEM ~ age_c + sex + educ + dx_bl + apoe + z_tl_bl + causage_bl + (age_c  | RID), 
+fitlmer.02a <- lmer(PHC_MEM ~ age_c + sex + educ + dx_bl + apoe + z_tl_bl + (age_c  | RID), 
                    REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
-summary(fitlmer.02)
+summary(fitlmer.02a)
 
-fitlmer.03 <- lmer(PHC_MEM ~ age_c + sex + educ + cdrsb_bl + apoe*age_c + z_tl_bl*age_c + causage_bl*age_c + (age_c  | RID), 
+fitlmer.02b <- lmer(PHC_MEM ~ age_c + sex + educ + dx_bl + apoe + causage_bl + (age_c  | RID), 
                    REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
-summary(fitlmer.03)
+summary(fitlmer.02b)
 
-fitlmer.03 <- lmer(PHC_MEM ~ age_c + sex + educ + cdrsb_bl + apoe*age_c + causeage_aaa_bl*age_c + (age_c  | RID), 
+## Longitudional
+fitlmer.03a <- lmer(PHC_MEM ~ age_c + sex + educ + cdrsb_bl + apoe*age_c + z_tl_bl*age_c + (age_c  | RID), 
                    REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
-summary(fitlmer.03)
+summary(fitlmer.03a)
+plot_model(fitlmer.03a, type = "pred", terms = c("age_c", "z_tl_bl"))
 
-fitlmer.03 <- lmer(PHC_MEM ~ age_c + sex + educ + cdrsb_bl + apoe*age_c + adptage_aaa_bl*age_c + (age_c  | RID), 
+fitlmer.03b <- lmer(PHC_MEM ~ age_c + sex + educ + cdrsb_bl + apoe*age_c + causage_bl*age_c + (age_c  | RID), 
                    REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
-summary(fitlmer.03)
+summary(fitlmer.03b)
+plot_model(fitlmer.03b, type = "pred", terms = c("age_c", "causage_bl"))
 
-fitlmer.03 <- lmer(PHC_MEM ~ age_c + sex + educ + cdrsb_bl + apoe*age_c + damage_aaa_bl*age_c + (age_c  | RID), 
+fitlmer.03c <- lmer(PHC_MEM ~ age_c + sex + educ + cdrsb_bl + apoe*age_c + z_tl_bl*age_c + causage_bl*age_c + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell + (age_c  | RID), 
                    REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
-summary(fitlmer.03)
+summary(fitlmer.03c)
+plot_model(fitlmer.03c, type = "pred", terms = c("age_c", "z_tl_bl"))
+plot_model(fitlmer.03c, type = "pred", terms = c("age_c", "causage_bl"))
+
+## Interaction
+fitlmer.04 <- lmer(PHC_MEM ~ age_c + sex + educ + cdrsb_bl + apoe*age_c + z_tl_bl*causage_bl*age_c + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell +  (age_c  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.04)
+
+## APOE Interaction
+fitlmer.05a <- lmer(PHC_MEM ~ age_c + sex + educ + cdrsb_bl +  z_tl_bl*apoe*age_c + (age_c  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.05a)
+
+fitlmer.05b <- lmer(PHC_MEM ~ age_c + sex + educ + cdrsb_bl +  z_tl_bl + causage_bl*apoe*age_c + (age_c  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.05b)
 
 model_parameters(fitlmer.03, pretty_names = FALSE)
 broom.mixed::tidy(fitlmer.03)
@@ -582,13 +651,22 @@ all = tribble(
   'PHC_MEM', 'Lin RAA', 'lin_raa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_MEM', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
 
+  'PHC_MEM', 'CausAge IRAA', 'causage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_MEM', 'PhenoAge IRAA', 'phenoage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_MEM', 'Horvathv2 IRAA', 'horvath_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_MEM', 'Hannum IRAA', 'hannum_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_MEM', 'Lin IRAA', 'lin_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_MEM', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+
   'PHC_MEM', 'TL_CausAge', 'causage_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_MEM', 'TL_CausAge AAA', 'causeage_aaa_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_MEM', 'TL_CausAge RAA', 'causage_raa_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_MEM', 'TL_CausAge IRAA', 'causage_iraa_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
 
   'PHC_MEM', 'TLxCausAge', 'z_tl_bl*causage_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_MEM', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_MEM', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_MEM', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
 
   ## EXF
   'PHC_EXF', 'Age', 'age_c', 'sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
@@ -616,13 +694,22 @@ all = tribble(
   'PHC_EXF', 'Lin RAA', 'lin_raa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_EXF', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
 
+  'PHC_EXF', 'CausAge IRAA', 'causage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_EXF', 'PhenoAge IRAA', 'phenoage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_EXF', 'Horvathv2 IRAA', 'horvath_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_EXF', 'Hannum IRAA', 'hannum_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_EXF', 'Lin IRAA', 'lin_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_EXF', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+
   'PHC_EXF', 'TL_CausAge', 'causage_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_EXF', 'TL_CausAge AAA', 'causeage_aaa_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_EXF', 'TL_CausAge RAA', 'causage_raa_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_EXF', 'TL_CausAge IRAA', 'causage_iraa_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
 
   'PHC_EXF', 'TLxCausAge', 'z_tl_bl*causage_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_EXF', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_EXF', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_EXF', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
 
   ## LAN
   'PHC_LAN', 'Age', 'age_c', 'sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
@@ -650,13 +737,22 @@ all = tribble(
   'PHC_LAN', 'Lin RAA', 'lin_raa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_LAN', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
 
+  'PHC_LAN', 'CausAge IRAA', 'causage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_LAN', 'PhenoAge IRAA', 'phenoage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_LAN', 'Horvathv2 IRAA', 'horvath_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_LAN', 'Hannum IRAA', 'hannum_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_LAN', 'Lin IRAA', 'lin_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_LAN', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+
   'PHC_LAN', 'TL_CausAge', 'causage_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_LAN', 'TL_CausAge AAA', 'causeage_aaa_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_LAN', 'TL_CausAge RAA', 'causage_raa_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_LAN', 'TL_CausAge IRAA', 'causage_iraa_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
 
   'PHC_LAN', 'TLxCausAge', 'z_tl_bl*causage_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_LAN', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_LAN', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_LAN', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
 
   ## VSP
   'PHC_VSP', 'Age', 'age_c', 'sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
@@ -684,13 +780,22 @@ all = tribble(
   'PHC_VSP', 'Lin RAA', 'lin_raa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_VSP', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
 
+  'PHC_VSP', 'CausAge IRAA', 'causage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_VSP', 'PhenoAge IRAA', 'phenoage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_VSP', 'Horvathv2 IRAA', 'horvath_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_VSP', 'Hannum IRAA', 'hannum_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_VSP', 'Lin IRAA', 'lin_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_VSP', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+
   'PHC_VSP', 'TL_CausAge', 'causage_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_VSP', 'TL_CausAge AAA', 'causeage_aaa_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_VSP', 'TL_CausAge RAA', 'causage_raa_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_VSP', 'TL_CausAge IRAA', 'causage_iraa_bl*age_c + z_tl_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
 
   'PHC_VSP', 'TLxCausAge', 'z_tl_bl*causage_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_VSP', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
   'PHC_VSP', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
+  'PHC_VSP', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*age_c', 'age_c + sex + educ + apoe + cdrsb_bl', '(age_c | RID)',
 
 ) %>%
   mutate(eq = glue('{outcome} ~ {predictors} + {covariates} + {random}'),
@@ -707,6 +812,8 @@ all %>% select(outcome, predictors, dataf) %>%
 all %>% select(outcome, predictors, covariates, dataf) %>%
   unnest(dataf) %>%
   write_csv('results/lmm_res.csv')
+
+write_rds(all, "intermediate/lmm_res.rds")
 ```
 
 ```{r}
@@ -715,14 +822,14 @@ df.p <- all %>%
   unnest(dataf) %>%
   filter(effect == "fixed", str_detect(term, "bl")) %>%
   filter(!str_detect(term, "dx|cdrsb")) %>%
-  filter(!str_detect(predictors, "\\+")) %>%
-  filter(str_detect(predictors, "\\*")) %>%
+  filter(!str_detect(BioAge, "TL_")) %>%
+  filter(!str_detect(BioAge, "TLx")) %>%
   mutate(
     group = ifelse(str_detect(term, "age_c"), "longitudional", "baseline"), 
     sig = ifelse(p.value < 0.05, TRUE, FALSE)
   )
 
-raw_bioage.p <- ggplot(filter(df.p, !str_detect(BioAge, "RAA|AAA")), aes(x = estimate, y = BioAge, color = sig)) + 
+raw_bioage.p <- ggplot(filter(df.p, !str_detect(BioAge, "IRAA|RAA|AAA")), aes(x = estimate, y = BioAge, color = sig)) + 
   facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
   geom_point() + 
   geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
@@ -734,7 +841,7 @@ raw_bioage.p <- ggplot(filter(df.p, !str_detect(BioAge, "RAA|AAA")), aes(x = est
 
 ggsave("results/plots/raw_bioage_res.png", plot = raw_bioage.p, width = 9, height = 4, units = 'in')
 
-raw_clocks.p <- filter(df.p, !str_detect(BioAge, "RAA|AAA")) %>% filter(!str_detect(BioAge, "TL|AgeAccelGrimv2|DunedinPACE")) %>%
+raw_clocks.p <- filter(df.p, !str_detect(BioAge, "IRAA|RAA|AAA")) %>% filter(!str_detect(BioAge, "TL|AgeAccelGrimv2|DunedinPACE")) %>%
 ggplot(., aes(x = estimate, y = BioAge, color = sig)) + 
   facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
   geom_point() + 
@@ -771,6 +878,16 @@ aaa_bioage.p <- ggplot(filter(df.p, str_detect(BioAge, "AAA")), aes(x = estimate
 
 ggsave("results/plots/aaa_bioage_res.png", plot = aaa_bioage.p, width = 9, height = 4, units = 'in')
 
+iraa_bioage.p <- ggplot(filter(df.p, str_detect(BioAge, "IRAA")), aes(x = estimate, y = BioAge, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  theme(
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+ggsave("results/plots/iraa_bioage_res.png", plot = iraa_bioage.p, width = 9, height = 4, units = 'in')
 
 ```
 
@@ -829,6 +946,20 @@ comb.raa <- ggplot(filter(df2.p, str_detect(BioAge, "RAA")), aes(x = estimate, y
     text = element_text(size = 8)
   )
 
+comb.iraa <- ggplot(filter(df2.p, str_detect(BioAge, "IRAA")), aes(x = estimate, y = term, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  labs(tag = 'IRAA') + 
+  theme(
+    strip.text = element_text(size = 8, face = "bold"), 
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
 legend <- get_legend(
   # create some space to the left of the legend
   comb.raa  + 
@@ -840,11 +971,12 @@ comb.p <- cowplot::plot_grid(
   comb.raw + theme(legend.position = 'none'), 
   comb.aaa + theme(legend.position = 'none'), 
   comb.raa + theme(legend.position = 'none'), 
+  comb.iraa + theme(legend.position = 'none'), 
   align = 'h',
   ncol = 1
 ) 
 
-ggsave("results/plots/comb_bioage_res.png", plot = comb.p , width = 9, height = 4, units = 'in')
+ggsave("results/plots/comb_bioage_res.png", plot = comb.p , width = 9, height = 5, units = 'in')
 
 ```
 
@@ -903,6 +1035,20 @@ int.raa <- ggplot(filter(df3.p, str_detect(BioAge, "RAA")), aes(x = estimate, y 
     text = element_text(size = 8)
   )
 
+int.iraa <- ggplot(filter(df3.p, str_detect(BioAge, "IRAA")), aes(x = estimate, y = term, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  labs(tag = 'IRAA') + 
+  theme(
+    strip.text = element_text(size = 8, face = "bold"), 
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
 legend <- get_legend(
   # create some space to the left of the legend
   comb.raa  + 
@@ -914,19 +1060,31 @@ int.p <- cowplot::plot_grid(
   int.raw + theme(legend.position = 'none'), 
   int.aaa + theme(legend.position = 'none'), 
   int.raa + theme(legend.position = 'none'), 
+  int.iraa + theme(legend.position = 'none'), 
   align = 'h',
   ncol = 1
 ) 
 
-ggsave("results/plots/int_bioage_res.png", plot = int.p , width = 9, height = 5, units = 'in')
+ggsave("results/plots/int_bioage_res.png", plot = int.p , width = 9, height = 5.5, units = 'in')
 
 ```
 
 ```{r}
-adni_lm <- adni %>% group_by(RID) %>% slice_min(PHC_Visit) %>% filter(PHC_Diagnosis == 1)
+all %>%
+  filter(str_detect(BioAge, "TL|CausAge")) %>%
+  select(outcome, BioAge, predictors, dataf) %>%
+  unnest(dataf) %>%
+  filter(str_detect(term, "tl|causage")) %>%
+  group_split(outcome)
 
-lm(PHC_MEM ~ PHC_Age_Cognition + sex + educ  + apoe + z_tl_bl + causage_bl, data = adni_lm) %>% summary()
 
+all %>% filter(BioAge == "CausAge AAA", outcome == "PHC_MEM") %>% pull(res) %>% 
+  magrittr::extract2(1) %>%
+  plot_model(., type = "pred", terms = c("age_c", "causeage_aaa_bl"))
+
+all %>% filter(BioAge == "DNAmGrimAgev2 AAA", outcome == "PHC_MEM") %>% pull(res) %>% 
+  magrittr::extract2(1) %>%
+  plot_model(., type = "pred", terms = c("age_c", "grimage_aaa_bl"))
 ```
 
 
