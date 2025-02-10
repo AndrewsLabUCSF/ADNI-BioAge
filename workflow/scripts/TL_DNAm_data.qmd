@@ -105,6 +105,14 @@ ts <- ts.raw %>%
   
 ```
 
+### mtDNAcn 
+```{r}
+load('resources/ADNI/BioAge/adni_mtcn.RData')
+mtDNAcn.raw <- dat_adni
+
+## TODO merge in mtDNAcn 
+```
+
 ### APOE
 
 ```{r}
