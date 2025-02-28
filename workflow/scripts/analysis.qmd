@@ -483,7 +483,7 @@ rf <- cog_long.raw %>%
   dplyr::select(projid, r_stroke, hypertension_cum) %>%
   left_join(dplyr::select(adri.raw, projid, age_bl, sex, educ, apoe_genotype, pa_risk, bmi, chlstrl, socialnetwork_risk, cogactivity_risk, alcohol_risk, smoke_risk, diabetes_risk, depression_risk, adri), 
             by = 'projid') %>%
-  filter(!is.na(educ))
+  filter(!is.na(educ)) 
 
   
 ### impute missing data 
@@ -524,6 +524,22 @@ rosmap_imp <- rosmap_ximp %>%
 libra <- rf %>%
   bind_cols(rosmap_imp) %>%
   mutate(
+    libra_agesex = case_when(
+      age_bl <= 64 & sex == 1 ~ 0,
+      age_bl > 64 & age_bl <= 69 & sex == 1 ~ 6,
+      age_bl > 69 & age_bl <= 74 & sex == 1 ~ 8,
+      age_bl > 74 & age_bl <= 79 & sex == 1 ~ 13,
+      age_bl > 79 & age_bl <= 84 & sex == 1 ~ 17,
+      age_bl > 84 & age_bl <= 89 & sex == 1 ~ 20,
+      age_bl > 89 & sex == 1 ~ 22,
+      age_bl <= 64 & sex == 0 ~ 0,
+      age_bl > 64 & age_bl <= 69 & sex == 0 ~ 4,
+      age_bl > 69 & age_bl <= 74 & sex == 0 ~ 7,
+      age_bl > 74 & age_bl <= 79 & sex == 0 ~ 11,
+      age_bl > 79 & age_bl <= 84 & sex == 0 ~ 15,
+      age_bl > 84 & age_bl <= 89 & sex == 0 ~ 19,
+      age_bl > 89 & sex == 0 ~ 23,
+   ),
     libra_pa = case_when(
       i_pa_risk %in% c(-3, -2) ~ 0, 
       i_pa_risk == 0 ~ 1.1,
@@ -578,6 +594,8 @@ libra <- rf %>%
   rowwise() %>%
   mutate(
     libra = sum(libra_pa, libra_cog, libra_alc, libra_smk, libra_stroke, libra_diab, 
+                libra_chl, libra_bmi, libra_htn, libra_dep, na.rm = F), 
+    libra2 = sum(libra_agesex, libra_pa, libra_cog, libra_alc, libra_smk, libra_stroke, libra_diab, 
                 libra_chl, libra_bmi, libra_htn, libra_dep, na.rm = F), 
   ) %>%
   ungroup()
@@ -754,7 +772,7 @@ rosmap.df <- rosmap.gen %>%
   left_join(rosmap.mtdnacn, by = c("projid")) %>%
   left_join(rosmap_nsnvs, by = c("projid")) %>%
   left_join(epiclocks.rosmap, by = c("specimenID.dnam" = "specimenID")) %>%
-  left_join(libra %>% dplyr::select(projid, adri, i_adri, libra, bmi),  by = c("projid")) %>%
+  left_join(libra %>% dplyr::select(projid, adri, i_adri, libra, libra2, bmi),  by = c("projid")) %>%
   left_join(rosmap_mcaide %>% dplyr::select(projid, mcaide),  by = c("projid")) %>%
   left_join(cog.raw %>% dplyr::select(projid, cogng_demog_slope, cognep_demog_slope, cognps_demog_slope, educ),  
             by = c("projid")) %>%
@@ -810,6 +828,7 @@ gpath_libra.res <- lm(gpath ~ libra + age_death + msex + apoe + tissue, data = r
 mtcn_dnam.res <- lm(z_mtcn ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(mtcn_dnam.res) 
 mtcn_gpath.res <- lm(z_mtcn ~ gpath + age_death + msex + apoe + tissue, data = rosmap.df); summary(mtcn_gpath.res) 
 mtcn_libra.res <- lm(z_mtcn ~ libra + age_death + msex + apoe + tissue, data = rosmap.df); summary(mtcn_libra.res) 
+mtcn_libra2.res <- lm(z_mtcn ~ libra2 + age_death + apoe + tissue, data = rosmap.df); summary(mtcn_libra2.res) 
 
 ## dnam
 dnma_mtcn.res <- lm(z_dnam ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.df) ; summary(dnma_mtcn.res) 

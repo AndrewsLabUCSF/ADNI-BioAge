@@ -15,6 +15,7 @@ library(glue)
 library(plotgardener)
 library(lme4)
 library(lmerTest)
+library(sjPlot)
 setwd("~/gitcode/DNAm")
 `%nin%` = negate(`%in%`) 
 ```
@@ -109,7 +110,12 @@ ts <- ts.raw %>%
 ```{r}
 load('resources/ADNI/BioAge/adni_mtcn.RData')
 mtDNAcn.raw <- dat_adni
-
+mtdnacn <- mtDNAcn.raw %>% 
+  dplyr::select(RID, mtcn) %>%
+  as_tibble() %>%
+  mutate(
+    RID = as.numeric(RID)
+  )
 ## TODO merge in mtDNAcn 
 ```
 
@@ -158,7 +164,8 @@ fbm.merge <- fluid_bm.raw %>%
  
 genetics <- tl.merge %>% 
   left_join(dnam.merge, by = c("RID", 'EXAM_DATE' = 'Edate_methy'))  %>% 
-  left_join(apoe.merge, by = c("RID")) 
+  left_join(apoe.merge, by = c("RID")) %>% 
+  left_join(mtdnacn, by = c("RID")) 
 
 epi_age_acc <- cog.merge %>% 
   left_join(genetics, by = c("RID", 'EXAMDATE' = "EXAM_DATE")) %>%
@@ -317,10 +324,12 @@ adni <- cog.merge %>%
     ) %>%
   ungroup() %>%
   mutate(
-   z_tl_bl = scale(tl_bl)[,1]
+   z_tl_bl = scale(tl_bl)[,1], 
+   z_mtcn = scale(mtcn)[,1]
   ) %>%
   group_by(RID) %>%
   fill(tl_bl, .direction = "down") %>%
+  fill(mtcn, .direction = "down") %>%
   fill(causage_bl, .direction = "down") %>%
   fill(adptage_bl, .direction = "down") %>%
   fill(damage_bl, .direction = "down") %>%
@@ -352,6 +361,7 @@ adni <- cog.merge %>%
   fill(lin_iraa_bl, .direction = "down") %>%
   fill(grimage_iraa_bl, .direction = "down") %>%
   fill(z_tl_bl, .direction = "down") %>%
+  fill(z_mtcn, .direction = "down") %>%
   fill(apoe, .direction = "updown") %>%
   fill(apoe, .direction = "down") %>%
   filter(!is.na(apoe)) %>%
@@ -416,6 +426,7 @@ adni_d <- adni %>%
     cdrsb = first(cdrsb_bl),
     dx = first(PHC_Diagnosis),
     TL = first(TL_BP_ADJ), 
+    mtDNAcn = first(mtcn), 
     PhenoAge = first(PhenoAge), 
     Horvathv2 = first(Horvathv2), 
     Hannum = first(Hannum),     
@@ -456,7 +467,7 @@ adni_d %>%
 ## Corelations 
 ### Corr-test
 res_cor <- adni_d %>%
-  select(age, TL, CausAge, PhenoAge, Horvathv2, Hannum, Lin, 
+  select(age, TL, mtDNAcn, CausAge, PhenoAge, Horvathv2, Hannum, Lin, 
          DNAmGrimAgev2, AgeAccelGrimv2, DunedinPACE) %>%
   drop_na() %>% 
   correlation()
@@ -594,6 +605,10 @@ fitlmer.02b <- lmer(PHC_MEM ~ months + age_bl + sex + educ + dx_bl + apoe + caus
                    REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
 summary(fitlmer.02b)
 
+fitlmer.02c <- lmer(PHC_MEM ~ months + age_bl + sex + educ + dx_bl + apoe + z_mtcn + (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.02c)
+
 ## Longitudional
 fitlmer.03a <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl + apoe*months + z_tl_bl*months + (months  | RID), 
                    REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
@@ -605,16 +620,26 @@ fitlmer.03b <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl + apoe*mon
 summary(fitlmer.03b)
 plot_model(fitlmer.03b, type = "pred", terms = c("age_c", "causage_bl"))
 
-fitlmer.03c <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl + apoe*months + z_tl_bl*months + causage_bl*months + (months  | RID), 
+fitlmer.03c <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl + apoe*months + z_mtcn*months + (months  | RID), 
                    REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
 summary(fitlmer.03c)
-plot_model(fitlmer.03c, type = "pred", terms = c("age_c", "z_tl_bl"))
-plot_model(fitlmer.03c, type = "pred", terms = c("age_c", "causage_bl"))
+plot_model(fitlmer.03c, type = "pred", terms = c("months", "z_mtcn"))
+
+fitlmer.03d <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl + apoe*months + z_tl_bl*months + causage_bl*months + z_mtcn*months + (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03d)
+plot_model(fitlmer.03d, type = "pred", terms = c("months", "z_tl_bl"))
+plot_model(fitlmer.03d, type = "pred", terms = c("months", "causage_bl"))
+plot_model(fitlmer.03d, type = "pred", terms = c("months", "z_mtcn"))
 
 ## Interaction
-fitlmer.04 <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl + apoe*months + z_tl_bl*causage_bl*months + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell +  (months  | RID), 
+fitlmer.04a <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl + apoe*months + z_tl_bl*causage_bl*months + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell +  (months  | RID), 
                    REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
-summary(fitlmer.04)
+summary(fitlmer.04a)
+
+fitlmer.04b <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl + apoe*months + z_tl_bl*causage_bl*z_mtcn*months +  (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.04b)
 
 ## APOE Interaction
 fitlmer.05a <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl +  z_tl_bl*apoe*months + (months  | RID), 

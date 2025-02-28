@@ -1,0 +1,27 @@
+---
+title: "Untitled"
+format: html
+editor: source
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+prot.raw <- read_csv("resources/ADNI/CruchagaLab_CSF_SOMAscan7k_Protein_matrix_postQC_20230620.csv")
+prot_ls <- read_csv("resources/ADNI/ADNI_Cruchaga_lab_CSF_SOMAscan7k_analyte_information_20_06_2023.csv")
+mitocarta <- readxl::read_xls("resources/Human.MitoCarta3.0.xls", sheet = 2)
+```
+
+Estimate mito content, sdh, cox
+or estimate, mito contenct, oxpos
+
+1. Trumpff, C. et al. Psychosocial experiences are associated with human brain mitochondrial biology. Proc. Natl. Acad. Sci. 121, e2317673121 (2024).
+1. Trumpff, C. et al. Mitochondrial respiratory chain protein co-regulation in the human brain. Heliyon 8, e09353 (2022).
+  
+```{r}
+
+prot_ls %>%
+    semi_join(mitocarta, by = c('EntrezGeneSymbol' = 'Symbol')) %>%
+    left_join(mitocarta, by = c('EntrezGeneSymbol' = 'Symbol'))
+
+```
