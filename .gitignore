@@ -52,3 +52,5 @@ logs/
 # results/
 .snakemake/
 bin/
+.DS_Store
+*/.DS_Store
