@@ -1,0 +1,2209 @@
+---
+title: "TL_DNAm_data"
+format: html
+editor: source
+editor_options: 
+  chunk_output_type: console
+---
+## Import
+
+```{r}
+library(tidyverse)
+library(easystats)
+library(broom)
+library(glue)
+library(plotgardener)
+library(lme4)
+library(lmerTest)
+library(sjPlot)
+library(gtools)
+setwd("~/gitcode/DNAm")
+`%nin%` = negate(`%in%`) 
+DATE = ymd(Sys.Date()) %>% str_replace_all("-", "")
+```
+
+```{r}
+## Import 
+
+adni <- read_csv('intermediate/adni.csv')
+cog.df <- adni %>% 
+  group_by(RID) %>%
+  slice_min(PHC_Visit) %>%
+  ungroup()
+mri.df <- read_csv('intermediate/mri.csv')
+flbm.df <- read_csv('intermediate/flbm.csv')
+
+adni %>% 
+  select(RID, gbl_cog, months_c, nk_cell, z_dnam_bl)
+```
+
+## Analysis
+### Global Cognition 
+#### Baseline Models
+```{r}
+fitlmer.00 <- lmer(gbl_cog ~ months_c + (months_c  | RID), REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead", optCtrl = list(maxfun = 200000)), data = adni)
+summary(fitlmer.00)
+
+cog_bl_cov <- "months_c + age_bl + sex + educ + cdrsb_bl + apoe + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+
+fitlmer.01 <- lmer(as.formula(glue("gbl_cog ~ {cog_bl_cov} + (months_c  | RID)")), 
+                  REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.01)
+
+fitlmer.02a <- lmer(as.formula(glue("gbl_cog ~ z_tl_bl + {cog_bl_cov} + (months_c  | RID)")), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.02a) 
+
+fitlmer.02b <- lmer(as.formula(glue("gbl_cog ~ z_dnam_bl + {cog_bl_cov} + (months_c  | RID)")), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.02b)
+
+fitlmer.02c <- lmer(as.formula(glue("gbl_cog ~ z_mtcn_bl + {cog_bl_cov} + (months_c  | RID)")), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.02c)
+```
+
+```{r}
+cog_bllm_cov <- "age_bl + sex + educ + cdrsb_bl + apoe + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+
+lm(glue("gbl_cog ~ {cog_bllm_cov}  +  mtcn_bl + causage_bl + tl_bl"), data = cog.df) %>% tidy()
+lm(glue("gbl_cog ~ {cog_bllm_cov}  +  mtcn_bl * causage_bl * tl_bl"), data = cog.df) %>% tidy()
+lm(glue("gbl_cog ~ {cog_bllm_cov}  +  mtcn_bl + causage_bl * tl_bl"), data = cog.df) %>% tidy()
+lm(glue("gbl_cog ~ {cog_bllm_cov}  +  mtcn_bl * causage_bl + tl_bl"), data = cog.df) %>% tidy()
+lm(glue("gbl_cog ~ {cog_bllm_cov}  +  causage_bl + mtcn_bl * tl_bl"), data = cog.df) %>% tidy()
+
+```
+
+#### Longitudinal
+```{r}
+
+cog_lt_cov <- "months_c + age_bl*months_c + sex + educ + cdrsb_bl*months_c + apoe*months_c + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+
+## Longitudional
+fitlmer.03 <- lmer(glue("gbl_cog ~ {cog_lt_cov} + (months_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03)
+
+fitlmer.03a <- lmer(glue("gbl_cog ~ z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03a)
+plot_model(fitlmer.03a, type = "pred", terms = c("months_c", "z_tl_bl"))
+
+fitlmer.03b <- lmer(glue("gbl_cog ~ z_dnam_bl*months_c + {cog_lt_cov} + (months_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03b)
+plot_model(fitlmer.03b, type = "pred", terms = c("months_c", "z_dnam_bl"))
+
+fitlmer.03c <- lmer(glue("gbl_cog ~ z_mtcn_bl*months_c + {cog_lt_cov} + (months_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03c)
+plot_model(fitlmer.03c, type = "pred", terms = c("months_c", "z_mtcn_bl"))
+
+fitlmer.03d <- lmer(glue("gbl_cog ~ z_tl_bl*months_c + z_dnam_bl*months_c + z_mtcn_bl*months_c + {cog_lt_cov} + (months_c  | RID)"), REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03d)
+
+plot_model(fitlmer.03d, type = "pred", terms = c("months_c", "z_tl_bl"))
+plot_model(fitlmer.03d, type = "pred", terms = c("months_c", "z_dnam_bl"))
+plot_model(fitlmer.03d, type = "pred", terms = c("months_c", "z_mtcn_bl"))
+```
+
+```{r}
+
+gbl_cog_bioage.res <- bind_rows(
+  broom.mixed::tidy(fitlmer.03) %>% mutate(outcome = 'gbl_cog', model = "baseline"),
+  broom.mixed::tidy(fitlmer.03a) %>% mutate(outcome = 'gbl_cog', model = "TL"),
+  broom.mixed::tidy(fitlmer.03b) %>% mutate(outcome = 'gbl_cog', model = "CausAge"),
+  broom.mixed::tidy(fitlmer.03c) %>% mutate(outcome = 'gbl_cog', model = "mtDNAcn"),
+  broom.mixed::tidy(fitlmer.03d) %>% mutate(outcome = 'gbl_cog', model = "BioAge")
+  ) %>%
+  relocate(outcome, model) %>%
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),
+    sig = stars.pval(p.value),              
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}{sig}")
+  ) 
+  
+gbl_cog_bioage.res  %>% 
+  select(-group) %>%
+  print(n = Inf)
+
+```
+
+```{r}
+gbl_cog_tl.p <- plot_model(fitlmer.03d, type = "pred", terms = c("months_c", "z_tl_bl")) + 
+  labs(
+    x = "Months (Centered)", 
+    y = "Global Cognition", 
+  ) + 
+  guides(color = guide_legend(title = "TL")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8)
+  )
+
+gbl_cog_dnam.p <- plot_model(fitlmer.03d, type = "pred", terms = c("months_c", "z_dnam_bl")) + 
+  labs(
+    x = "Months (Centered)", 
+    y = "Global Cognition", 
+  ) + 
+  guides(color = guide_legend(title = "CausAge")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8)
+  )
+
+gbl_cog_mtcn.p <- plot_model(fitlmer.03d, type = "pred", terms = c("months_c", "z_mtcn_bl")) + 
+  labs(
+    x = "Months (Centered)", 
+    y = "Global Cognition", 
+  ) + 
+  guides(color = guide_legend(title = "mtDNAcn")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8)
+  )
+
+gbl_cog_bioage.p <- plot_grid(gbl_cog_tl.p, gbl_cog_dnam.p, gbl_cog_mtcn.p, nrow = 1, labels = c("A", "B", "C"))
+gbl_cog_bioage.p
+
+ggsave(glue("results/plots/gbl_cog_bioage_{DATE}.png"), plot = gbl_cog_bioage.p, width = 9, height = 4, units = 'in')
+
+```
+
+#### Interactions
+```{r}
+
+## Interaction
+
+fitlmer.04a <- lmer(glue("gbl_cog ~ z_tl_bl*z_dnam_bl*months_c + {cog_lt_cov} + (months_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.04a)
+plot_model(fitlmer.04a, type = "pred", terms = c("z_dnam_bl", "z_tl_bl"))
+
+fitlmer.04b <- lmer(glue("gbl_cog ~ z_tl_bl*z_mtcn_bl*months_c + {cog_lt_cov} + (months_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.04b)
+plot_model(fitlmer.04b, type = "pred", terms = c("z_mtcn_bl", "z_tl_bl"))
+
+
+fitlmer.04c <- lmer(glue("gbl_cog ~ z_dnam_bl*z_mtcn_bl*months_c + {cog_lt_cov} + (months_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.04c)
+plot_model(fitlmer.04c, type = "pred", terms = c("z_mtcn_bl", "z_dnam_bl"))
+
+fitlmer.04d <- lmer(glue("gbl_cog ~ z_mtcn_bl*z_tl_bl*z_dnam_bl*months_c + {cog_lt_cov} + (months_c  | RID)"), 
+                   REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni)
+summary(fitlmer.04d)
+```
+
+```{r}
+
+gbl_cog_x.res <- bind_rows(
+  broom.mixed::tidy(fitlmer.04a) %>% mutate(outcome = 'gbl_cog', model = "DNAmxTL"), 
+  broom.mixed::tidy(fitlmer.04b) %>% mutate(outcome = 'gbl_cog', model = "mtDNAcnxTL"),
+  broom.mixed::tidy(fitlmer.04c) %>% mutate(outcome = 'gbl_cog', model = "mtDNAcnxDNAm"),
+  broom.mixed::tidy(fitlmer.04d) %>% mutate(outcome = 'gbl_cog', model = "mtDNAcnxDNAmxTL"),
+) %>% 
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),              # decimal (3 places)
+    sig = stars.pval(p.value),      
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
+  ) 
+  
+glbl_gog_x.res  %>% 
+  print(n = Inf)
+
+```
+
+```{r}
+gbl_cog_tlxdnam.p <- plot_model(fitlmer.04a, type = "pred", terms = c("z_dnam_bl", "z_tl_bl")) + 
+  labs(
+    x = "CausAge", 
+    y = "Global Cognition", 
+  ) + 
+  guides(color = guide_legend(title = "TL")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8)
+  )
+
+gbl_cog_mtcnxtl.p <- plot_model(fitlmer.04b, type = "pred", terms = c("z_mtcn_bl", "z_tl_bl")) + 
+  labs(
+    x = "mtDNAcn", 
+    y = "Global Cognition", 
+  ) + 
+  guides(color = guide_legend(title = "TL")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8)
+  )
+
+gbl_cog_mtcnxdnam.p <- plot_model(fitlmer.04c, type = "pred", terms = c("z_mtcn_bl", "z_dnam_bl")) + 
+  labs(
+    x = "mtDNAcn", 
+    y = "Global Cognition", 
+  ) + 
+  guides(color = guide_legend(title = "CausAge")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8)
+  )
+
+gbl_cog_bioage_interactions.p <- plot_grid(gbl_cog_tlxdnam.p, gbl_cog_mtcnxtl.p, gbl_cog_mtcnxdnam.p, nrow = 1, labels = c("A", "B", "C"))
+gbl_cog_bioage_interactions.p
+
+ggsave(glue("results/plots/gbl_cog_bioage_interactions_{DATE}.png"), plot = gbl_cog_bioage_interactions.p, width = 9, height = 4, units = 'in')
+
+```
+
+#### APOE Interactions
+```{r}
+
+## APOE Interaction
+
+fitlmer.05a <- lmer(glue("gbl_cog ~ z_tl_bl*apoe*months_c + {cog_lt_cov} + (months_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.05a)
+
+fitlmer.05b <- lmer(glue("gbl_cog ~ z_dnam_bl*apoe*months_c + {cog_lt_cov} + (months_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.05b)
+
+fitlmer.05c <- lmer(glue("gbl_cog ~ z_mtcn_bl*apoe*months_c + {cog_lt_cov} + (months_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.05c)
+```
+
+
+### Cogntive Domains
+#### Episodic Memory
+```{r}
+
+cog_lt_cov <- "months_c + age_bl*months_c + sex + educ + cdrsb_bl*months_c + apoe*months_c + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+
+## Longitudional
+fitlmer.mem_tl <- lmer(
+      glue("PHC_MEM ~ z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.mem_dnam <- lmer(
+      glue("PHC_MEM ~ z_dnam_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.mem_mtcn <- lmer(
+      glue("PHC_MEM ~ z_mtcn_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.mem_bioag <- lmer(
+      glue("PHC_MEM ~ z_tl_bl*months_c + z_dnam_bl*months_c + z_mtcn_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+summary(fitlmer.mem_bioag)
+plot_model(fitlmer.mem_bioag, type = "pred", terms = c("months_c", "z_tl_bl"))
+plot_model(fitlmer.mem_bioag, type = "pred", terms = c("months_c", "z_dnam_bl"))
+plot_model(fitlmer.mem_bioag, type = "pred", terms = c("months_c", "z_mtcn_bl"))
+
+## DNAm x mtCN
+fitlmer.mem_dnam_mtcn <- lmer(glue("PHC_MEM ~ z_mtcn_bl*z_dnam_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni
+  )
+summary(fitlmer.mem_dnam_mtcn )
+
+## DNAm x TL
+fitlmer.mem_dnam_tl <- lmer(glue("PHC_MEM ~ z_dnam_bl*z_tl_bl*months_c +  {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni
+  )
+summary(fitlmer.mem_dnam_tl )
+
+## TL x mtCN
+fitlmer.mem_tl_mtcn <- lmer(glue("PHC_MEM ~  z_mtcn_bl*z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni
+  )
+summary(fitlmer.mem_tl_mtcn )
+
+## TL x DNAm x mtCN
+fitlmer.mem_bioag_x <- lmer(glue("PHC_MEM ~ z_mtcn_bl*z_dnam_bl*z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.mem_bioag_x )
+```
+
+```{r}
+mem.res <- bind_rows(
+  broom.mixed::tidy(fitlmer.mem_tl) %>% mutate(outcome = 'mem', model = "TL", predictor = 'TL'),
+  broom.mixed::tidy(fitlmer.mem_mtcn) %>% mutate(outcome = 'mem', model = "mtDNAcn", predictor = 'mtDNAcn'),
+  broom.mixed::tidy(fitlmer.mem_dnam) %>% mutate(outcome = 'mem', model = "CausAge", predictor = 'CausAge'),
+  broom.mixed::tidy(fitlmer.mem_bioag) %>% mutate(outcome = 'mem', model = "BioAge"),
+  broom.mixed::tidy(fitlmer.mem_dnam_tl) %>% mutate(outcome = 'mem', model = "DNAmxTL"), 
+  broom.mixed::tidy(fitlmer.mem_tl_mtcn) %>% mutate(outcome = 'mem', model = "mtDNAcnxTL"),
+  broom.mixed::tidy(fitlmer.mem_dnam_mtcn) %>% mutate(outcome = 'mem', model = "mtDNAcnxDNAm"),
+  broom.mixed::tidy(fitlmer.mem_bioag_x ) %>% mutate(outcome = 'mem', model = "mtDNAcnxDNAmxTL"),
+) %>% 
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),              # decimal (3 places)
+    sig = stars.pval(p.value),      
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
+  ) 
+  
+```
+
+#### Executive Function
+```{r}
+
+fitlmer.exf_tl <- lmer(
+      glue("PHC_EXF ~ z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.exf_dnam <- lmer(
+      glue("PHC_EXF ~ z_dnam_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.exf_mtcn <- lmer(
+      glue("PHC_EXF ~ z_mtcn_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.exf_bioag <- lmer(glue("PHC_EXF ~ z_tl_bl*months_c + z_dnam_bl*months_c + z_mtcn_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.exf_bioag)
+plot_model(fitlmer.exf_bioag, type = "pred", terms = c("months_c", "z_tl_bl"))
+plot_model(fitlmer.exf_bioag, type = "pred", terms = c("months_c", "z_dnam_bl"))
+plot_model(fitlmer.exf_bioag, type = "pred", terms = c("months_c", "z_mtcn_bl"))
+
+## DNAm x mtCN
+fitlmer.exf_dnam_mtcn <- lmer(glue("PHC_EXF ~ z_mtcn_bl*z_dnam_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.exf_dnam_mtcn )
+
+## DNAm x TL
+fitlmer.exf_dnam_tl <- lmer(glue("PHC_EXF ~ z_dnam_bl*z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.exf_dnam_tl )
+
+## TL x mtCN
+fitlmer.exf_tl_mtcn <- lmer(glue("PHC_EXF ~ z_mtcn_bl*z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.exf_tl_mtcn )
+
+## TL x DNAm x mtCN
+fitlmer.exf_bioag_x <- lmer(glue("PHC_EXF ~ z_mtcn_bl*z_dnam_bl*z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.exf_bioag_x )
+```
+
+```{r}
+exf.res <- bind_rows(
+  broom.mixed::tidy(fitlmer.exf_tl) %>% mutate(outcome = 'exf', model = "TL", predictor = 'TL'),
+  broom.mixed::tidy(fitlmer.exf_mtcn) %>% mutate(outcome = 'exf', model = "mtDNAcn", predictor = 'mtDNAcn'),
+  broom.mixed::tidy(fitlmer.exf_dnam) %>% mutate(outcome = 'exf', model = "CausAge", predictor = 'CausAge'),
+  broom.mixed::tidy(fitlmer.exf_bioag) %>% mutate(outcome = 'exf', model = "BioAge"),
+  broom.mixed::tidy(fitlmer.exf_dnam_tl) %>% mutate(outcome = 'exf', model = "DNAmxTL"), 
+  broom.mixed::tidy(fitlmer.exf_tl_mtcn) %>% mutate(outcome = 'exf', model = "mtDNAcnxTL"),
+  broom.mixed::tidy(fitlmer.exf_dnam_mtcn) %>% mutate(outcome = 'exf', model = "mtDNAcnxDNAm"),
+  broom.mixed::tidy(fitlmer.exf_bioag_x ) %>% mutate(outcome = 'exf', model = "mtDNAcnxDNAmxTL"),
+) %>% 
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),              # decimal (3 places)
+    sig = stars.pval(p.value),      
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
+  ) 
+  
+```
+
+#### Language
+```{r}
+
+fitlmer.lan_tl <- lmer(
+      glue("PHC_LAN ~ z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.lan_dnam <- lmer(
+      glue("PHC_LAN ~ z_dnam_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.lan_mtcn <- lmer(
+      glue("PHC_LAN ~ z_mtcn_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.lan_bioag <- lmer(glue("PHC_LAN ~ z_tl_bl*months_c + z_dnam_bl*months_c + z_mtcn_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.lan_bioag)
+plot_model(fitlmer.lan_bioag, type = "pred", terms = c("months_c", "z_tl_bl"))
+plot_model(fitlmer.lan_bioag, type = "pred", terms = c("months_c", "z_dnam_bl"))
+plot_model(fitlmer.lan_bioag, type = "pred", terms = c("months_c", "z_mtcn_bl"))
+
+## DNAm x mtCN
+fitlmer.lan_dnam_mtcn <- lmer(glue("PHC_LAN ~ z_mtcn_bl*z_dnam_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.lan_dnam_mtcn )
+
+## DNAm x TL
+fitlmer.lan_dnam_tl <- lmer(glue("PHC_LAN ~ z_dnam_bl*z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.lan_dnam_tl )
+
+## TL x mtCN
+fitlmer.lan_tl_mtcn <- lmer(glue("PHC_LAN ~ z_mtcn_bl*z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.lan_tl_mtcn )
+
+## TL x DNAm x mtCN
+fitlmer.lan_bioag_x <- lmer(glue("PHC_LAN ~ z_mtcn_bl*z_dnam_bl*z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.lan_bioag_x )
+
+```
+
+```{r}
+lan.res <- bind_rows(
+  broom.mixed::tidy(fitlmer.lan_tl) %>% mutate(outcome = 'lan', model = "TL", predictor = 'TL'),
+  broom.mixed::tidy(fitlmer.lan_mtcn) %>% mutate(outcome = 'lan', model = "mtDNAcn", predictor = 'mtDNAcn'),
+  broom.mixed::tidy(fitlmer.lan_dnam) %>% mutate(outcome = 'lan', model = "CausAge", predictor = 'CausAge'),
+  broom.mixed::tidy(fitlmer.lan_bioag) %>% mutate(outcome = 'lan', model = "BioAge"),
+  broom.mixed::tidy(fitlmer.lan_dnam_tl) %>% mutate(outcome = 'lan', model = "DNAmxTL"), 
+  broom.mixed::tidy(fitlmer.lan_tl_mtcn) %>% mutate(outcome = 'lan', model = "mtDNAcnxTL"),
+  broom.mixed::tidy(fitlmer.lan_dnam_mtcn) %>% mutate(outcome = 'lan', model = "mtDNAcnxDNAm"),
+  broom.mixed::tidy(fitlmer.lan_bioag_x ) %>% mutate(outcome = 'lan', model = "mtDNAcnxDNAmxTL"),
+) %>% 
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),              # decimal (3 places)
+    sig = stars.pval(p.value),      
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
+  ) 
+  
+```
+
+#### Visualspatial
+```{r}
+
+fitlmer.vsp_tl <- lmer(
+      glue("PHC_VSP ~ z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.vsp_dnam <- lmer(
+      glue("PHC_VSP ~ z_dnam_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.vsp_mtcn <- lmer(
+      glue("PHC_VSP ~ z_mtcn_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.vsp_bioag <- lmer(glue("PHC_VSP ~ z_tl_bl*months_c + z_dnam_bl*months_c + z_mtcn_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.vsp_bioag)
+plot_model(fitlmer.vsp_bioag, type = "pred", terms = c("months_c", "z_tl_bl"))
+plot_model(fitlmer.vsp_bioag, type = "pred", terms = c("months_c", "z_dnam_bl"))
+plot_model(fitlmer.vsp_bioag, type = "pred", terms = c("months_c", "z_mtcn_bl"))
+
+## DNAm x mtCN
+fitlmer.vsp_dnam_mtcn <- lmer(glue("PHC_VSP ~ z_mtcn_bl*z_dnam_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.vsp_dnam_mtcn )
+
+## DNAm x TL
+fitlmer.vsp_dnam_tl <- lmer(glue("PHC_VSP ~ z_dnam_bl*z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.vsp_dnam_tl )
+
+## TL x mtCN
+fitlmer.vsp_tl_mtcn <- lmer(glue("PHC_VSP ~ z_mtcn_bl*z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.vsp_tl_mtcn )
+
+## TL x DNAm x mtCN
+fitlmer.vsp_bioag_x <- lmer(glue("PHC_VSP ~ z_mtcn_bl*z_dnam_bl*z_tl_bl*months_c + {cog_lt_cov} + (months_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.vsp_bioag_x )
+
+```
+
+```{r}
+vsp.res <- bind_rows(
+  broom.mixed::tidy(fitlmer.vsp_tl) %>% mutate(outcome = 'vsp', model = "TL", predictor = 'TL'),
+  broom.mixed::tidy(fitlmer.vsp_mtcn) %>% mutate(outcome = 'vsp', model = "mtDNAcn", predictor = 'mtDNAcn'),
+  broom.mixed::tidy(fitlmer.vsp_dnam) %>% mutate(outcome = 'vsp', model = "CausAge", predictor = 'CausAge'),
+  broom.mixed::tidy(fitlmer.vsp_bioag) %>% mutate(outcome = 'vsp', model = "BioAge"),
+  broom.mixed::tidy(fitlmer.vsp_dnam_tl) %>% mutate(outcome = 'vsp', model = "DNAmxTL"), 
+  broom.mixed::tidy(fitlmer.vsp_tl_mtcn) %>% mutate(outcome = 'vsp', model = "mtDNAcnxTL"),
+  broom.mixed::tidy(fitlmer.vsp_dnam_mtcn) %>% mutate(outcome = 'vsp', model = "mtDNAcnxDNAm"),
+  broom.mixed::tidy(fitlmer.vsp_bioag_x ) %>% mutate(outcome = 'vsp', model = "mtDNAcnxDNAmxTL"),
+) %>% 
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),              # decimal (3 places)
+    sig = stars.pval(p.value),      
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
+  ) 
+  
+```
+
+
+## Fluid Biomarkers 
+### AB42
+```{r}
+csf_cov <- "age + sex + apoe + cdrsb + nk_cell + b_cell + cd4_t_cell + cd8_t_cell + monocyte"
+## ab42
+ab42_mtcn.res <- lm(glue("PHC_AB42 ~ mtcn + {csf_cov}"), data = flbm.df) 
+ab42_dnam.res <- lm(glue("PHC_AB42 ~ CausAge + {csf_cov}"), data = flbm.df) 
+ab42_tl.res <- lm(glue("PHC_AB42 ~ TL_BP_ADJ + {csf_cov}"), data = flbm.df)
+ab42_bioage.res <- lm(glue("PHC_AB42 ~ mtcn + CausAge + TL_BP_ADJ + {csf_cov}"), data = flbm.df) 
+
+ab42_dnamxtl.res <- lm(glue("PHC_AB42 ~ CausAge * TL_BP_ADJ + {csf_cov}"), data = flbm.df) 
+ab42_mtcnxtl.res <- lm(glue("PHC_AB42 ~ mtcn * TL_BP_ADJ + {csf_cov}"), data = flbm.df) 
+ab42_mtcnxdnam.res <- lm(glue("PHC_AB42 ~ mtcn * CausAge + {csf_cov}"), data = flbm.df) 
+ab42_mtcnxdnamxtl.res <- lm(glue("PHC_AB42 ~ mtcn * CausAge * TL_BP_ADJ + {csf_cov}"), data = flbm.df)
+
+ab42.res <- bind_rows(
+  tidy(ab42_mtcn.res, conf.int = T) %>% mutate(outcome = "AB42", model = 'mtDNAcn'),
+  tidy(ab42_dnam.res, conf.int = T) %>% mutate(outcome = "AB42", model = 'DNAm'),
+  tidy(ab42_tl.res, conf.int = T) %>% mutate(outcome = "AB42", model = 'TL'),
+  tidy(ab42_bioage.res, conf.int = T) %>% mutate(outcome = "AB42", model = 'bioage'),
+  tidy(ab42_dnamxtl.res, conf.int = T) %>% mutate(outcome = "AB42", model = 'DNAmxTL'),
+  tidy(ab42_mtcnxtl.res, conf.int = T) %>% mutate(outcome = "AB42", model = 'mtDNAcnxTL'),
+  tidy(ab42_mtcnxdnam.res, conf.int = T) %>% mutate(outcome = "AB42", model = 'mtDNAcnxDNAm'),
+  tidy(ab42_mtcnxdnamxtl.res, conf.int = T) %>% mutate(outcome = "AB42", model = 'mtDNAcnxDNAmxTL'),
+)
+
+```
+
+### Tau
+```{r}
+## tau
+tau_mtcn.res <- lm(glue("PHC_Tau ~ mtcn + {csf_cov}"), data = flbm.df) 
+tau_dnam.res <- lm(glue("PHC_Tau ~ CausAge + {csf_cov}"), data = flbm.df) 
+tau_tl.res <- lm(glue("PHC_Tau ~ TL_BP_ADJ + {csf_cov}"), data = flbm.df) 
+tau_bioage.res <- lm(glue("PHC_Tau ~ mtcn + CausAge + TL_BP_ADJ + {csf_cov}"), data = flbm.df) 
+
+tau_dnamxtl.res <- lm(glue("PHC_Tau ~ CausAge * TL_BP_ADJ + {csf_cov}"), data = flbm.df) 
+tau_mtcnxtl.res <- lm(glue("PHC_Tau ~ mtcn * TL_BP_ADJ + {csf_cov}"), data = flbm.df) 
+tau_mtcnxdnam.res <- lm(glue("PHC_Tau ~ mtcn * CausAge + {csf_cov}"), data = flbm.df) 
+tau_mtcnxdnamxtl.res <- lm(glue("PHC_Tau ~ mtcn * CausAge * TL_BP_ADJ + {csf_cov}"), data = flbm.df) 
+
+tau.res <- bind_rows(
+  tidy(tau_mtcn.res, conf.int = T) %>% mutate(outcome = "Tau", model = 'mtDNAcn'),
+  tidy(tau_dnam.res, conf.int = T) %>% mutate(outcome = "Tau", model = 'DNAm'),
+  tidy(tau_tl.res, conf.int = T) %>% mutate(outcome = "Tau", model = 'TL'),
+  tidy(tau_bioage.res, conf.int = T) %>% mutate(outcome = "Tau", model = 'bioage'),
+  tidy(tau_dnamxtl.res, conf.int = T) %>% mutate(outcome = "Tau", model = 'DNAmxTL'),
+  tidy(tau_mtcnxtl.res, conf.int = T) %>% mutate(outcome = "Tau", model = 'mtDNAcnxTL'),
+  tidy(tau_mtcnxdnam.res, conf.int = T) %>% mutate(outcome = "Tau", model = 'mtDNAcnxDNAm'),
+  tidy(tau_mtcnxdnamxtl.res, conf.int = T) %>% mutate(outcome = "Tau", model = 'mtDNAcnxDNAmxTL'),
+)
+
+```
+
+### pTau
+```{r}
+## pTau
+ptau_mtcn.res <- lm(glue("PHC_pTau ~ mtcn + {csf_cov}"), data = flbm.df) 
+ptau_dnam.res <- lm(glue("PHC_pTau ~ CausAge + {csf_cov}"), data = flbm.df) 
+ptau_tl.res <- lm(glue("PHC_pTau ~ TL_BP_ADJ + {csf_cov}"), data = flbm.df) 
+ptau_bioage.res <- lm(glue("PHC_pTau ~ mtcn + CausAge + TL_BP_ADJ + {csf_cov}"), data = flbm.df) 
+
+ptau_dnamxtl.res <- lm(glue("PHC_pTau ~ CausAge * TL_BP_ADJ + {csf_cov}"), data = flbm.df)
+ptau_mtcnxtl.res <- lm(glue("PHC_pTau ~ mtcn * TL_BP_ADJ + {csf_cov}"), data = flbm.df) 
+ptau_mtcnxdnam.res <- lm(glue("PHC_pTau ~ mtcn * CausAge + {csf_cov}"), data = flbm.df) 
+ptau_mtcnxdnamxtl.res <- lm(glue("PHC_pTau ~ mtcn * CausAge * TL_BP_ADJ + {csf_cov}"), data = flbm.df) 
+
+ptau.res <- bind_rows(
+  tidy(ptau_mtcn.res, conf.int = T) %>% mutate(outcome = "pTau", model = 'mtDNAcn'),
+  tidy(ptau_dnam.res, conf.int = T) %>% mutate(outcome = "pTau", model = 'DNAm'),
+  tidy(ptau_tl.res, conf.int = T) %>% mutate(outcome = "pTau", model = 'TL'),
+  tidy(ptau_bioage.res, conf.int = T) %>% mutate(outcome = "pTau", model = 'bioage'),
+  tidy(ptau_dnamxtl.res, conf.int = T) %>% mutate(outcome = "pTau", model = 'DNAmxTL'),
+  tidy(ptau_mtcnxtl.res, conf.int = T) %>% mutate(outcome = "pTau", model = 'mtDNAcnxTL'),
+  tidy(ptau_mtcnxdnam.res, conf.int = T) %>% mutate(outcome = "pTau", model = 'mtDNAcnxDNAm'),
+  tidy(ptau_mtcnxdnamxtl.res, conf.int = T) %>% mutate(outcome = "pTau", model = 'mtDNAcnxDNAmxTL'),
+)
+
+```
+
+### Results
+```{r}
+csf.res <- bind_rows(
+  ab42.res,
+  tau.res,
+  ptau.res
+) %>%
+  relocate(outcome, model) %>% 
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),              # decimal (3 places)
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
+  ) 
+
+csf.res %>%
+  filter(term %in% c('mtcn', 'CausAge', 'TL_BP_ADJ')) %>%
+  filter(model == 'bioage')
+
+csf.res %>%
+  filter(str_detect(term, ":")) %>%
+  select(outcome, model, out)
+
+```
+
+```{r}
+csf_coef.p <- csf.res %>%
+  filter(term %in% c('mtcn', 'CausAge', 'TL_BP_ADJ')) %>%
+  mutate(
+    term = case_when(
+      term == "mtcn" ~ 'mtDNAcn', 
+      term == "CausAge" ~ 'CausAge', 
+      term == "TL_BP_ADJ" ~ 'TL'
+    )
+  ) %>%
+  ggplot(., aes(x = estimate, y = term)) + 
+  facet_grid(rows = vars(outcome)) + 
+  geom_point() + 
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  labs(
+    x = "Coefficient Estimate (95% CI)",
+    y = NULL,
+  ) +
+  theme_bw() + 
+  theme(
+    strip.background = element_blank()
+  )
+
+ggsave(glue("results/plots/csf_bioage_{DATE}.png"), plot = csf_coef.p, width = 9, height = 4, units = 'in')
+
+
+plot_model(ab42_dnamxtl.res, type = "pred", terms = c("CausAge", "TL_BP_ADJ")) + 
+  labs(
+    x = "CausAge", 
+    y = "AB42", 
+  ) + 
+  guides(color = guide_legend(title = "TL")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8)
+  )
+
+```
+
+## Neuroimaging 
+### Cortical Thickness
+```{r}
+## Cortical Thickness meta ROI
+cort_thk_covar = "age_bl + sex + apoe + cdrsb_bl + PHC_ScannerBatchName.1 + months + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+
+cort_thk_mtcn.res <- lm(glue("cort_thk ~ mtcn_bl + {cort_thk_covar}"), data = mri.df)
+cort_thk_dnam.res <- lm(glue("cort_thk ~ causage_bl + {cort_thk_covar}"), data = mri.df) 
+cort_thk_tl.res <- lm(glue("cort_thk ~ tl_bl + {cort_thk_covar}"), data = mri.df) 
+cort_thk_bioage.res <- lm(glue("cort_thk ~ mtcn_bl + causage_bl + tl_bl + {cort_thk_covar}"), data = mri.df) 
+
+cort_thk_dnamxtl.res <- lm(glue("cort_thk ~ causage_bl * tl_bl + {cort_thk_covar}"), data = mri.df) 
+cort_thk_mtcnxtl.res <- lm(glue("cort_thk ~ mtcn_bl * tl_bl + {cort_thk_covar}"), data = mri.df) 
+cort_thk_mtcnxdnam.res <- lm(glue("cort_thk ~ mtcn_bl * causage_bl + {cort_thk_covar}"), data = mri.df)
+cort_thk_mtcnxdnamxtl.res <- lm(glue("cort_thk ~ mtcn_bl * causage_bl * tl_bl + {cort_thk_covar}"), data = mri.df) 
+```
+
+### Gray Matter Volume
+```{r}
+## Gray matter volume meta ROI
+gm_vol_covar = "age_bl + sex + apoe + cdrsb_bl + PHC_ScannerBatchName.1 + months + EstimatedTotalIntraCranialVol_combat + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+
+gmvol_mtcn.res <- lm(glue("gm_vol ~ mtcn_bl + {gm_vol_covar}"), data = mri.df) 
+gmvol_dnam.res <- lm(glue("gm_vol ~ causage_bl + {gm_vol_covar}"), data = mri.df) 
+gmvol_tl.res <- lm(glue("gm_vol ~ tl_bl + {gm_vol_covar}"), data = mri.df)
+gmvol_bioage.res <- lm(glue("gm_vol ~  mtcn_bl + causage_bl + tl_bl + {gm_vol_covar}"), data = mri.df)
+
+gmvol_dnamxtl.res <- lm(glue("gm_vol ~ causage_bl * tl_bl + {gm_vol_covar}"), data = mri.df) 
+gmvol_mtcnxtl.res <- lm(glue("gm_vol ~ mtcn_bl * tl_bl + {gm_vol_covar}"), data = mri.df) 
+gmvol_mtcnxdnam.res <- lm(glue("gm_vol ~ mtcn_bl * causage_bl + {gm_vol_covar}"), data = mri.df) 
+gmvol_mtcnxdnamxtl.res <- lm(glue("gm_vol ~ mtcn_bl * causage_bl * tl_bl + {gm_vol_covar}"), data = mri.df)
+
+```
+
+### Results
+```{r}
+mri.res <- bind_rows(
+  tidy(cort_thk_mtcn.res, conf.int = T) %>% mutate(outcome = "Cortical Thickness", model = 'mtDNAcn'),
+  tidy(cort_thk_dnam.res, conf.int = T) %>% mutate(outcome = "Cortical Thickness", model = 'DNAm'),
+  tidy(cort_thk_tl.res, conf.int = T) %>% mutate(outcome = "Cortical Thickness", model = 'TL'),
+  tidy(cort_thk_bioage.res, conf.int = T) %>% mutate(outcome = "Cortical Thickness", model = 'bioage'),
+  tidy(cort_thk_dnamxtl.res, conf.int = T) %>% mutate(outcome = "Cortical Thickness", model = 'DNAmxTL'),
+  tidy(cort_thk_mtcnxtl.res, conf.int = T) %>% mutate(outcome = "Cortical Thickness", model = 'mtDNAcnxTL'),
+  tidy(cort_thk_mtcnxdnam.res, conf.int = T) %>% mutate(outcome = "Cortical Thickness", model = 'mtDNAcnxDNAm'),
+  tidy(cort_thk_mtcnxdnamxtl.res, conf.int = T) %>% mutate(outcome = "Cortical Thickness", model = 'mtDNAcnxDNAmxTL'),
+
+  tidy(gmvol_mtcn.res, conf.int = T) %>% mutate(outcome = "GM Vol", model = 'mtDNAcn'),
+  tidy(gmvol_dnam.res, conf.int = T) %>% mutate(outcome = "GM Vol", model = 'DNAm'),
+  tidy(gmvol_tl.res, conf.int = T) %>% mutate(outcome = "GM Vol", model = 'TL'),
+  tidy(gmvol_bioage.res, conf.int = T) %>% mutate(outcome = "GM Vol", model = 'bioage'),
+  tidy(gmvol_dnamxtl.res, conf.int = T) %>% mutate(outcome = "GM Vol", model = 'DNAmxTL'),
+  tidy(gmvol_mtcnxtl.res, conf.int = T) %>% mutate(outcome = "GM Vol", model = 'mtDNAcnxTL'),
+  tidy(gmvol_mtcnxdnam.res, conf.int = T) %>% mutate(outcome = "GM Vol", model = 'mtDNAcnxDNAm'),
+  tidy(gmvol_mtcnxdnamxtl.res, conf.int = T) %>% mutate(outcome = "GM Vol", model = 'mtDNAcnxDNAmxTL'),
+
+) %>%
+  relocate(outcome, model) %>% 
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),              # decimal (3 places)
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
+  ) 
+
+mri.res %>%
+  filter(term %in% c('mtcn_bl', 'causage_bl', 'tl_bl')) %>%
+  filter(model == 'main')  %>%
+  select(outcome, model, term, out)
+
+mri.res %>%
+  filter(str_detect(term, ":")) %>%
+  select(outcome, model, term, out)
+
+```
+
+```{r}
+mri_coef.p <- mri.res %>%
+  filter(term %in% c('mtcn_bl', 'causage_bl', 'tl_bl')) %>%
+  filter(model == 'main') %>%
+  mutate(
+    term = case_when(
+      term == "mtcn_bl" ~ 'mtDNAcn', 
+      term == "causage_bl" ~ 'CausAge', 
+      term == "tl_bl" ~ 'TL'
+    )
+  ) %>%
+  ggplot(., aes(x = estimate, y = term)) + 
+  facet_grid(rows = vars(outcome)) + 
+  geom_point() + 
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  labs(
+    x = "Coefficient Estimate (95% CI)",
+    y = NULL,
+  ) +
+  theme_bw() + 
+  theme(
+    strip.background = element_blank()
+  )
+mri_coef.p
+
+ggsave(glue("results/plots/mri_bioage_{DATE}.png"), plot = mri_coef.p, width = 9, height = 4, units = 'in')
+
+
+```
+
+## Summarize Results
+
+```{r}
+
+cog_summary.res <- bind_rows(
+    mem.res, 
+    exf.res, 
+    lan.res, 
+    vsp.res
+  ) %>% 
+  mutate(
+    endophenotype = 'Cognition',
+    model2 = case_when(
+      model %in% c('TL', 'DNAm', 'mtDNAcn') ~ 'Single',
+      model == 'BioAge' ~ 'Joint', 
+      str_detect(model, "x") ~ 'Interaction',
+    ),
+    model = case_when(
+      model == 'BioAge' & str_detect(term, 'z_tl_bl') ~ 'TL',
+      model == 'BioAge' & str_detect(term, 'z_mtcn_bl') ~ 'mtDNAcn',
+      model == 'BioAge' & str_detect(term, 'z_dnam_bl') ~ "DNAm",
+      TRUE ~ model
+    ),
+    outcome = fct_recode(outcome, 'Memory' = 'mem', "Language" = 'lan', 'Executive Function' = 'exf', 'Visuospatial ability, or ' = 'vsp'),
+    outcome = case_when(
+      str_detect(term, "months") ~ paste0(outcome, " Decline"), 
+      TRUE ~ outcome
+    ),
+    term = if_else(
+      str_detect(term, ":"),
+      map_chr(str_split(term, ":"), ~ paste(sort(.x), collapse = ":")),
+      term
+    )
+  ) %>% 
+  relocate(outcome, model, model2) %>%
+  filter(str_detect(term, "mtcn|dnam|tl")) %>%
+  filter(!(model2 == 'Interaction' & !str_detect(term, ":"))) %>%
+  filter(!(model2 == 'Interaction' & term %in% c("months_c:z_tl_bl", "months_c:z_dnam_bl", "months_c:z_mtcn_bl"))) %>%
+  filter(!(model == "mtDNAcnxDNAmxTL" & str_count(term, ":") < 2)) %>%
+  filter(!(model == "mtDNAcnxDNAmxTL" & str_count(term, ":") == 2 & str_detect(term, "months_c"))) %>%
+  mutate(  
+    term = model, 
+    model = model2
+  ) %>% 
+  select(-model2)
+
+
+res <- bind_rows(
+  gbl_cog_bioage.res %>%
+    # select(outcome, model, term, p.value) %>%
+    filter(str_detect(term, "mtcn|dnam|tl")) %>%
+    mutate(
+      endophenotype = 'Cognition',
+      outcome = ifelse(str_detect(term, "months"), 'Global Cognitive Decline', 'Global Cognition'), 
+      model = ifelse(model == 'BioAge', 'Joint', 'Single'),
+      term = case_when(
+        str_detect(term, 'tl') ~ 'TL',
+        str_detect(term, 'mtcn') ~ 'mtDNAcn',
+        str_detect(term, 'dnam') ~ "DNAm",
+      )
+      ),
+  
+  gbl_cog_x.res %>%
+    #select(outcome, model, term, p.value) %>%
+    filter(str_detect(term, "mtcn|dnam|tl")) %>%
+    filter(str_detect(term, ":"))  %>%
+    filter(term %nin% c("z_tl_bl:months_c", "z_dnam_bl:months_c", "z_mtcn_bl:months_c")) %>%
+    filter(!(model == "mtDNAcnxDNAmxTL" & str_count(term, ":") < 2)) %>%
+    filter(!(model == "mtDNAcnxDNAmxTL" & str_count(term, ":") == 2 & str_detect(term, "months_c"))) %>%
+    mutate(
+      endophenotype = 'Cognition',
+      outcome = ifelse(str_detect(term, "months"), 'Global Cognitive Decline', 'Global Cognition'), 
+      term = model,
+      model = "Interaction",
+      ), 
+  
+  cog_summary.res, 
+
+  mri.res %>%
+  #select(outcome, model, term, p.value) %>%
+  filter(str_detect(term, "mtcn|causage|tl")) %>%
+  mutate(
+    endophenotype = 'MRI',
+    model2 = case_when(
+      model == 'bioage' ~ 'Joint', 
+      str_detect(model, 'x') ~ 'Interaction', 
+      TRUE ~ 'Single'
+    ), 
+    model = case_when(
+      model == 'bioage' & str_detect(term, 'tl') ~ 'TL',
+      model == 'bioage' & str_detect(term, 'mtcn') ~ 'mtDNAcn',
+      model == 'bioage' & str_detect(term, 'causage') ~ "DNAm",
+      TRUE ~ model
+    )
+  ) %>%
+  filter(!(model2 == 'Interaction' & !str_detect(term, ":"))) %>%
+  filter(!(model == 'mtDNAcnxDNAmxTL' & str_count(term, ":") < 2)) %>%
+  mutate(  
+    term = model, 
+    model = model2
+  ) %>% 
+  select(-model2), 
+
+  csf.res %>%
+    #select(outcome, model, term, p.value) %>%
+    filter(str_detect(term, "mtcn|CausAge|TL")) %>%
+      mutate(
+      endophenotype = 'CSF',
+      model2 = case_when(
+        model == 'bioage' ~ 'Joint', 
+        str_detect(model, 'x') ~ 'Interaction', 
+        TRUE ~ 'Single'
+      ), 
+      model = case_when(
+        model == 'bioage' & str_detect(term, 'TL') ~ 'TL',
+        model == 'bioage' & str_detect(term, 'mtcn') ~ 'mtDNAcn',
+        model == 'bioage' & str_detect(term, 'CausAge') ~ "DNAm",
+        TRUE ~ model
+      )
+    )  %>%
+    filter(!(model2 == 'Interaction' & !str_detect(term, ":"))) %>%
+    filter(!(model == 'mtDNAcnxDNAmxTL' & str_count(term, ":") < 2)) %>%
+    mutate(  
+      term = model, 
+      model = model2
+    ) %>% 
+    select(-model2)
+)
+
+
+res.df <- res %>% 
+  select(endophenotype, outcome, model, term, p.value) %>%
+  # pivot_wider(names_from = outcome, values_from = p.value) %>%
+  mutate(
+    signif = case_when(
+      p.value < 0.05               ~ "\u2713",  # check mark ✓
+      p.value >= 0.05 & p.value < 0.1 ~ "\u2022",  # bullet •
+      p.value >= 0.1               ~ "\u2717"   # cross ✗
+    ), 
+    model = fct_relevel(model, 'Single', 'Joint','Interaction'), 
+    term = fct_relevel(term, 'mtDNAcnxDNAmxTL'), 
+    outcome = fct_relevel(outcome, 'Global Cognition', 'Global Cognitive Decline', 'Memory', 'Memory Decline')
+  )
+  
+res.p <- ggplot(res.df, aes(x = outcome, y = term, label = signif, color = signif)) +
+  geom_text(size = 6, family = "Arial Unicode MS") +
+  facet_grid(rows = vars(model), cols = vars(endophenotype), 
+             scales = "free", space = "free") +
+  scale_color_manual(values = c("black", "darkgreen", "firebrick")) +
+  # Move x-axis labels to the top
+  scale_x_discrete(position = "top") +
+  labs(x = NULL, y = NULL) +
+  theme_bw() +
+  theme(
+    # Angle the top labels
+    axis.text.x.top = element_text(angle = 45, hjust = 0),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(), 
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    strip.text.x = element_blank(),
+    legend.position = "none"
+  )
+ 
+res.p  
+
+
+ggsave(glue("results/plots/results_{DATE}.png"), plot = res.p , width = 9, height = 4, units = 'in')
+
+
+```
+
+
+```{r}
+
+cog_bioage.out <- bind_rows(
+    gbl_cog_bioage.res, gbl_cog_x.res, 
+    mem.res, 
+    exf.res, 
+    lan.res, 
+    vsp.res
+  ) %>%
+  filter(effect == "fixed") %>%
+  select(outcome, model, term, estimate, std.error, p.value_fmt, sig) %>%
+  mutate(
+    term = if_else(
+      str_detect(term, ":"),
+      map_chr(str_split(term, ":"), ~ paste(sort(.x), collapse = ":")),
+      term
+    )
+  ) %>%
+  # Combine p.value_fmt and sig into one column
+  unite(p, c("p.value_fmt", "sig"), sep = " ") %>%
+  pivot_wider(
+    names_from   = model,
+    values_from  = c(estimate, std.error, p),
+    names_glue   = "{.value}_{model}"
+  ) %>%
+  mutate(
+    effect = ifelse(str_detect(term, "months"), "longitudinal", "baseline")
+  ) %>%
+  relocate(
+    outcome, term, effect, 
+    ends_with("_baseline"), 
+    ends_with("_TL"), 
+    ends_with("_CausAge"), 
+    ends_with("_mtDNAcn"), 
+    ends_with("_bioage"), 
+    ends_with("_mtDNAcnxTL"), 
+    ends_with("_mtDNAcnxDNAm"), 
+    ends_with("_DNAmxTL"), 
+    ends_with("_mtDNAcnxDNAmxTL")
+  ) %>%
+  arrange(outcome, effect)
+
+cog_bioage.out
+
+cog_bioage.out  %>%
+  write_csv(glue('results/cog_results_{DATE}.csv'), na = "")
+
+```
+
+```{r}
+csf_res.out <- csf.res %>%
+  mutate(
+    sig = stars.pval(p.value), 
+    term = if_else(
+      str_detect(term, ":"),
+      map_chr(str_split(term, ":"), ~ paste(sort(.x), collapse = ":")),
+      term
+    ), 
+    term = fct_relevel(term, 
+      "(Intercept)", "age", "sex", "cdrsb", 'apoee2+', "apoee4+", "b_cell", "cd4_t_cell", "cd8_t_cell", "nk_cell", "monocyte", 
+      "TL_BP_ADJ", "CausAge", "mtcn", "CausAge:mtcn", "mtcn:TL_BP_ADJ", "CausAge:TL_BP_ADJ", "CausAge:mtcn:TL_BP_ADJ"
+      )
+  ) %>%
+  # Combine p.value_fmt and sig into one column 
+  select(outcome, model, term, estimate, std.error, p.value_fmt, sig) %>%
+  unite(p, c("p.value_fmt", "sig"), sep = " ") %>%
+    pivot_wider(
+    names_from   = model,
+    values_from  = c(estimate, std.error, p),
+    names_glue   = "{.value}_{model}"
+  ) %>%
+  relocate(
+    outcome, term, 
+    ends_with("_baseline"), 
+    ends_with("_TL"), 
+    ends_with("_DNAm"), 
+    ends_with("_mtDNAcn"), 
+    ends_with("_bioage"), 
+    ends_with("_mtDNAcnxTL"), 
+    ends_with("_mtDNAcnxDNAm"), 
+    ends_with("_DNAmxTL"), 
+    ends_with("_mtDNAcnxDNAmxTL")
+  ) %>%
+  arrange(outcome, term)
+
+csf_res.out  %>%
+  write_csv(glue('results/csf_results_{DATE}.csv'), na = "")
+
+```
+
+
+```{r}
+mri_res.out <- mri.res %>%
+  mutate(
+    sig = stars.pval(p.value), 
+    term = if_else(
+      str_detect(term, ":"),
+      map_chr(str_split(term, ":"), ~ paste(sort(.x), collapse = ":")),
+      term
+    ), 
+    term = fct_relevel(term, 
+      "(Intercept)", "age_bl", 'months', "sex", "cdrsb_bl", 'apoee2+', "apoee4+", 
+      "b_cell_bl", "cd4_t_cell_bl", "cd8_t_cell_bl", "nk_cell_bl", "monocyte_bl", 
+      "EstimatedTotalIntraCranialVol_combat", "PHC_ScannerBatchName.1ADNI2/GO_3.0", "PHC_ScannerBatchName.1ADNI3_3.0_GE", "PHC_ScannerBatchName.1ADNI3_3.0_Philips", "PHC_ScannerBatchName.1ADNI3_3.0_Siemens", 
+      "tl_bl", "causage_bl", "mtcn_bl", "causage_bl:mtcn_bl", "mtcn_bl:tl_bl", "causage_bl:tl_bl", "causage_bl:mtcn_bl:tl_bl"
+      )
+  ) %>%
+  # Combine p.value_fmt and sig into one column 
+  select(outcome, model, term, estimate, std.error, p.value_fmt, sig) %>%
+  unite(p, c("p.value_fmt", "sig"), sep = " ") %>%
+    pivot_wider(
+    names_from   = model,
+    values_from  = c(estimate, std.error, p),
+    names_glue   = "{.value}_{model}"
+  ) %>%
+  relocate(
+    outcome, term, 
+    ends_with("_baseline"), 
+    ends_with("_TL"), 
+    ends_with("_DNAm"), 
+    ends_with("_mtDNAcn"), 
+    ends_with("_bioage"), 
+    ends_with("_mtDNAcnxTL"), 
+    ends_with("_mtDNAcnxDNAm"), 
+    ends_with("_DNAmxTL"), 
+    ends_with("_mtDNAcnxDNAmxTL")
+  ) %>%
+  arrange(outcome, term)
+
+mri_res.out  %>%
+  write_csv(glue('results/mri_results_{DATE}.csv'), na = "")
+
+```
+
+
+## Main Analyses
+```{r}
+main = tribble(
+  ~outcome, ~BioAge, ~predictors, ~covariates, ~random,
+  'PHC_MEM', 'Age', 'months', 'age_bl + sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
+  # 'PHC_MEM', 'TL', 'z_tl_bl', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  # 'PHC_MEM', 'CausAge', 'causage_bl', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Joint', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Interaction', 'mtcn*z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  ## EXF
+  'PHC_EXF', 'Age', 'months', 'age_bl + sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Joint', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Interaction', 'mtcn*z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  ## LAN
+  'PHC_LAN', 'Age', 'months', 'age_bl + sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_LAN', 'Joint', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Interaction', 'mtcn*z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  ## VSP
+  'PHC_VSP', 'Age', 'months', 'age_bl + sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Joint', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Interaction', 'mtcn*z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+) %>%
+  mutate(eq = glue('{outcome} ~ {predictors} + {covariates} + {random}'),
+               res = map(eq, lmer, REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni),
+               dataf = map(res, broom.mixed::tidy, conf.int = TRUE))
+
+main %>% select(outcome, predictors, dataf) %>%
+  unnest(dataf) %>%
+  filter(effect == "fixed", str_detect(term, "bl")) %>%
+  filter(!str_detect(term, "dx")) %>%
+  filter(p.value < 0.05) %>%
+  print(n = Inf)
+
+main %>% select(outcome, predictors, covariates, dataf) %>%
+  unnest(dataf) %>%
+  write_csv('results/lmm_res_main.csv')
+
+write_rds(main, "intermediate/lmm_res_main.rds")
+```
+
+### Plots
+```{r}
+## Coefficent Plot - seperate Model
+df_main.p <- main %>%
+  select(outcome, BioAge, predictors, dataf) %>%
+  unnest(dataf) %>% 
+  filter(effect == "fixed", str_detect(term, "z_tl|causage|mtcn")) %>%
+  filter(!str_detect(BioAge, "IRAA|RAA|AAA")) %>%
+  filter(!str_detect(BioAge, "TL_")) %>%
+  filter(!str_detect(BioAge, "TLx")) %>%
+  filter(!str_detect(BioAge, "mtcnx")) %>%
+  mutate(
+    group = ifelse(str_detect(term, "months"), "longitudional", "baseline"), 
+    sig = ifelse(p.value < 0.05, TRUE, FALSE)
+  )
+
+main_bioage.p <- ggplot(df_main.p, aes(x = estimate, y = BioAge, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  theme(
+    strip.text = element_text(size = 8, face = "bold"), 
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+main_bioage.p 
+ggsave(glue("results/plots/main_bioage_res_{DATE}.png"), plot = main_bioage.p, width = 9, height = 4, units = 'in')
+
+## Coefficent Plot - Joint Model
+
+df2.p <- main %>%
+  select(outcome, BioAge, predictors, dataf) %>%
+  unnest(dataf) %>%
+  filter(effect == "fixed", str_detect(term, "bl|mtcn")) %>%
+  filter(!str_detect(term, "dx|cdrsb|^age_bl")) %>%
+  # filter(str_detect(BioAge, "TL_CausAge|TLxCausAge")) %>%
+  filter(str_detect(BioAge, "Joint")) %>%
+  filter(!str_detect(BioAge, "RAA|AAA")) %>%
+  mutate(
+    group = ifelse(str_detect(term, "months"), "longitudional", "baseline"), 
+    sig = ifelse(p.value < 0.05, TRUE, FALSE), 
+    BioAge = case_when(
+      str_detect(term, 'tl') ~ "TL", 
+      str_detect(term, 'causage') ~ 'CausAge', 
+      str_detect(term, 'mtcn') ~ "mtDNAcn"
+    )
+  )
+
+comb_raw.p <- ggplot(df2.p, aes(x = estimate, y = BioAge, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  theme(
+    strip.text = element_text(size = 8, face = "bold"), 
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
+comb_raw.p
+
+ggsave(glue("results/plots/main_bioage_comb_res_{DATE}.png"), plot = comb_raw.p, width = 9, height = 4, units = 'in')
+
+```
+
+```{r}
+main %>% select(BioAge, outcome, predictors, dataf) %>%
+  unnest(dataf) %>%
+  filter(effect == "fixed", str_detect(term, "tl|mtcn|causage")) %>%
+  filter(effect == "fixed", str_detect(BioAge, "TLxCausAge|mtcnxCausAge|TLxmtcn|Interaction"))  %>%
+  filter(effect == "fixed", str_detect(term, ":"))  %>%
+  filter(effect == "fixed", str_detect(term, "z_tl_bl:z_mtcn|z_mtcn:causage_bl|z_tl_bl:causage_bl"))  %>%
+  select(-effect, -group, -df, -statistic) %>%
+  filter(p.value < 0.05) %>%
+  print(n = Inf)
+
+main %>% 
+  filter(outcome == 'PHC_VSP') %>%
+  filter(str_detect(BioAge, "x|Int")) %>%
+  pull(res) %>%
+  map(summary)
+
+```
+
+## Sensetivity Analyses
+```{r}
+all = tribble(
+  ~outcome, ~BioAge, ~predictors, ~covariates, ~random,
+  'PHC_MEM', 'Age', 'months', 'sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
+ # 'PHC_MEM', 'TL', 'z_tl_bl', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+ # 'PHC_MEM', 'CausAge', 'causage_bl', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'PhenoAge', 'phenoage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Horvathv2', 'horvath_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Hannum', 'hannum_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Lin', 'lin_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'DNAmGrimAgev2', 'grimage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'AgeAccelGrimv2', 'ageaccelgrim_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'DunedinPACE', 'dunedinpace_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_MEM', 'CausAge AAA', 'causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'PhenoAge AAA', 'phenoage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Horvathv2 AAA', 'horvath_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Hannum AAA', 'hannum_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Lin AAA', 'lin_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'DNAmGrimAgev2 AAA', 'grimage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_MEM', 'CausAge RAA', 'causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'PhenoAge RAA', 'phenoage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Horvathv2 RAA', 'horvath_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Hannum RAA', 'hannum_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Lin RAA', 'lin_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_MEM', 'CausAge IRAA', 'causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'PhenoAge IRAA', 'phenoage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Horvathv2 IRAA', 'horvath_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Hannum IRAA', 'hannum_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Lin IRAA', 'lin_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_MEM', 'TL_CausAge_mtcn', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_MEM', 'TL_CausAge_mtcn AAA', 'causeage_aaa_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TL_CausAge_mtcn RAA', 'causage_raa_bl*months + z_tl_bl*months + z_mtcn', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TL_CausAge_mtcn IRAA', 'causage_iraa_bl*months + z_tl_bl*months + z_mtcn', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_MEM', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  ## EXF
+  'PHC_EXF', 'Age', 'months', 'sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'PhenoAge', 'phenoage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Horvathv2', 'horvath_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Hannum', 'hannum_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Lin', 'lin_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'DNAmGrimAgev2', 'grimage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'AgeAccelGrimv2', 'ageaccelgrim_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'DunedinPACE', 'dunedinpace_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_EXF', 'CausAge AAA', 'causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'PhenoAge AAA', 'phenoage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Horvathv2 AAA', 'horvath_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Hannum AAA', 'hannum_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Lin AAA', 'lin_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'DNAmGrimAgev2 AAA', 'grimage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  
+  'PHC_EXF', 'CausAge RAA', 'causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'PhenoAge RAA', 'phenoage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Horvathv2 RAA', 'horvath_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Hannum RAA', 'hannum_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Lin RAA', 'lin_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_EXF', 'CausAge IRAA', 'causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'PhenoAge IRAA', 'phenoage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Horvathv2 IRAA', 'horvath_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Hannum IRAA', 'hannum_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Lin IRAA', 'lin_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_EXF', 'TL_CausAge_mtcn', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_EXF', 'TL_CausAge AAA', 'causeage_aaa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TL_CausAge RAA', 'causage_raa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TL_CausAge IRAA', 'causage_iraa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_EXF', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  ## LAN
+  'PHC_LAN', 'Age', 'months', 'sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'PhenoAge', 'phenoage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Horvathv2', 'horvath_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Hannum', 'hannum_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Lin', 'lin_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'DNAmGrimAgev2', 'grimage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'AgeAccelGrimv2', 'ageaccelgrim_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'DunedinPACE', 'dunedinpace_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_LAN', 'CausAge AAA', 'causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'PhenoAge AAA', 'phenoage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Horvathv2 AAA', 'horvath_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Hannum AAA', 'hannum_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Lin AAA', 'lin_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'DNAmGrimAgev2 AAA', 'grimage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  
+  'PHC_LAN', 'CausAge RAA', 'causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'PhenoAge RAA', 'phenoage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Horvathv2 RAA', 'horvath_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Hannum RAA', 'hannum_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Lin RAA', 'lin_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_LAN', 'CausAge IRAA', 'causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'PhenoAge IRAA', 'phenoage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Horvathv2 IRAA', 'horvath_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Hannum IRAA', 'hannum_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Lin IRAA', 'lin_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_LAN', 'TL_CausAge_mtcn', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_LAN', 'TL_CausAge AAA', 'causeage_aaa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TL_CausAge RAA', 'causage_raa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TL_CausAge IRAA', 'causage_iraa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_LAN', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  ## VSP
+  'PHC_VSP', 'Age', 'months', 'sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'PhenoAge', 'phenoage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Horvathv2', 'horvath_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Hannum', 'hannum_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Lin', 'lin_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'DNAmGrimAgev2', 'grimage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'AgeAccelGrimv2', 'ageaccelgrim_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'DunedinPACE', 'dunedinpace_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_VSP', 'CausAge AAA', 'causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'PhenoAge AAA', 'phenoage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Horvathv2 AAA', 'horvath_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Hannum AAA', 'hannum_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Lin AAA', 'lin_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'DNAmGrimAgev2 AAA', 'grimage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  
+  'PHC_VSP', 'CausAge RAA', 'causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'PhenoAge RAA', 'phenoage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Horvathv2 RAA', 'horvath_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Hannum RAA', 'hannum_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Lin RAA', 'lin_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_VSP', 'CausAge IRAA', 'causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'PhenoAge IRAA', 'phenoage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Horvathv2 IRAA', 'horvath_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Hannum IRAA', 'hannum_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Lin IRAA', 'lin_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_VSP', 'TL_CausAge_mtcn', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_VSP', 'TL_CausAge AAA', 'causeage_aaa_bl*months + z_tl_bl*months ', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TL_CausAge RAA', 'causage_raa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TL_CausAge IRAA', 'causage_iraa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+  'PHC_VSP', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+
+) %>%
+  mutate(eq = glue('{outcome} ~ {predictors} + {covariates} + {random}'),
+               res = map(eq, lmer, REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni),
+               dataf = map(res, broom.mixed::tidy, conf.int = TRUE))
+
+all %>% select(outcome, predictors, dataf) %>%
+  unnest(dataf) %>%
+  filter(effect == "fixed", str_detect(term, "bl")) %>%
+  filter(!str_detect(term, "dx")) %>%
+  filter(p.value < 0.05) %>%
+  print(n = Inf)
+
+all %>% select(outcome, predictors, covariates, dataf) %>%
+  unnest(dataf) %>%
+  write_csv('results/lmm_res.csv')
+
+write_rds(all, "intermediate/lmm_res.rds")
+```
+
+
+```{r}
+df.p <- all %>%
+  select(outcome, BioAge, predictors, dataf) %>%
+  unnest(dataf) %>% 
+  filter(effect == "fixed", str_detect(term, "bl|mtcn")) %>%
+  filter(!str_detect(term, "dx|cdrsb|^age_bl")) %>%
+  filter(!str_detect(BioAge, "TL_")) %>%
+  filter(!str_detect(BioAge, "TLx")) %>%
+  filter(!str_detect(BioAge, "mtcnx")) %>%
+  mutate(
+    group = ifelse(str_detect(term, "months"), "longitudional", "baseline"), 
+    sig = ifelse(p.value < 0.05, TRUE, FALSE)
+  )
+
+raw_bioage.p <- ggplot(filter(df.p, !str_detect(BioAge, "IRAA|RAA|AAA")), aes(x = estimate, y = BioAge, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  theme(
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
+ggsave(glue("results/plots/raw_bioage_res_{DATE}.png"), plot = raw_bioage.p, width = 9, height = 4, units = 'in')
+
+raw_clocks.p <- filter(df.p, !str_detect(BioAge, "IRAA|RAA|AAA")) %>% filter(!str_detect(BioAge, "TL|mtDNAcn|AgeAccelGrimv2|DunedinPACE")) %>%
+ggplot(., aes(x = estimate, y = BioAge, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  theme(
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
+ggsave(glue("results/plots/raw_clocks_res_{DATE}.png"), plot = raw_clocks.p, width = 9, height = 4, units = 'in')
+
+raa_bioage.p <- ggplot(filter(df.p, str_detect(BioAge, " RAA")), aes(x = estimate, y = BioAge, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  theme(
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
+ggsave(glue("results/plots/raa_bioage_res.png_{DATE}.png"), plot = raa_bioage.p, width = 9, height = 4, units = 'in')
+
+aaa_bioage.p <- ggplot(filter(df.p, str_detect(BioAge, "AAA")), aes(x = estimate, y = BioAge, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  theme(
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
+ggsave(glue("results/plots/aaa_bioage_res.png_{DATE}.png"), plot = aaa_bioage.p, width = 9, height = 4, units = 'in')
+
+iraa_bioage.p <- ggplot(filter(df.p, str_detect(BioAge, "IRAA")), aes(x = estimate, y = BioAge, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  theme(
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+ggsave(glue("results/plots/iraa_bioage_res.png_{DATE}.png"), plot = iraa_bioage.p, width = 9, height = 4, units = 'in')
+
+```
+
+```{r}
+df2.p <- all %>%
+  select(outcome, BioAge, predictors, dataf) %>%
+  unnest(dataf) %>%
+  filter(effect == "fixed", str_detect(term, "bl|mtcn")) %>%
+  filter(!str_detect(term, "dx|cdrsb|^age_bl")) %>%
+  # filter(str_detect(BioAge, "TL_CausAge|TLxCausAge")) %>%
+  filter(str_detect(BioAge, "TL_CausAge")) %>%
+  mutate(
+    group = ifelse(str_detect(term, "months"), "longitudional", "baseline"), 
+    sig = ifelse(p.value < 0.05, TRUE, FALSE)
+  )
+
+comb.raw <- ggplot(filter(df2.p, !str_detect(BioAge, "RAA|AAA")), aes(x = estimate, y = term, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  labs(tag = 'Raw') + 
+  theme(
+    strip.text = element_text(size = 8, face = "bold"), 
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
+comb.aaa <- ggplot(filter(df2.p, str_detect(BioAge, "AAA")), aes(x = estimate, y = term, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  labs(tag = 'AAA') + 
+  theme(
+    strip.text = element_text(size = 8, face = "bold"), 
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
+comb.raa <- ggplot(filter(df2.p, str_detect(BioAge, "RAA")), aes(x = estimate, y = term, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  labs(tag = 'RAA') + 
+  theme(
+    strip.text = element_text(size = 8, face = "bold"), 
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
+comb.iraa <- ggplot(filter(df2.p, str_detect(BioAge, "IRAA")), aes(x = estimate, y = term, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  labs(tag = 'IRAA') + 
+  theme(
+    strip.text = element_text(size = 8, face = "bold"), 
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
+legend <- cowplot::get_legend(
+  # create some space to the left of the legend
+  comb.raa  + 
+    guides(color = guide_legend(nrow = 1)) +
+    theme(legend.position = "bottom")
+)
+
+comb.p <- cowplot::plot_grid(
+  comb.raw + theme(legend.position = 'none'), 
+  comb.aaa + theme(legend.position = 'none'), 
+  comb.raa + theme(legend.position = 'none'), 
+  comb.iraa + theme(legend.position = 'none'), 
+  align = 'h',
+  ncol = 1
+) 
+
+ggsave("results/plots/comb_bioage_res.png", plot = comb.p , width = 9, height = 5, units = 'in')
+
+```
+
+```{r}
+df3.p <- all %>%
+  select(outcome, BioAge, predictors, dataf) %>%
+  unnest(dataf) %>%
+  filter(effect == "fixed", str_detect(term, "bl")) %>%
+  filter(!str_detect(term, "dx|cdrsb|^age_bl")) %>%
+  # filter(str_detect(BioAge, "TL_CausAge|TLxCausAge")) %>%
+  filter(str_detect(BioAge, "TLxCausAge")) %>%
+  mutate(
+    group = ifelse(str_detect(term, "months"), "longitudional", "baseline"), 
+    sig = ifelse(p.value < 0.05, TRUE, FALSE)
+  )
+
+int.raw <- ggplot(filter(df3.p, !str_detect(BioAge, "RAA|AAA")), aes(x = estimate, y = term, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  labs(tag = 'Raw') + 
+  theme(
+    strip.text = element_text(size = 8, face = "bold"), 
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
+int.aaa <- ggplot(filter(df3.p, str_detect(BioAge, "AAA")), aes(x = estimate, y = term, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  labs(tag = 'AAA') + 
+  theme(
+    strip.text = element_text(size = 8, face = "bold"), 
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
+int.raa <- ggplot(filter(df3.p, str_detect(BioAge, "RAA")), aes(x = estimate, y = term, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  labs(tag = 'RAA') + 
+  theme(
+    strip.text = element_text(size = 8, face = "bold"), 
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
+int.iraa <- ggplot(filter(df3.p, str_detect(BioAge, "IRAA")), aes(x = estimate, y = term, color = sig)) + 
+  facet_grid(rows = vars(group), cols = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_linerange(aes(xmin = conf.low, xmax = conf.high)) + 
+  theme_bw() + 
+  labs(tag = 'IRAA') + 
+  theme(
+    strip.text = element_text(size = 8, face = "bold"), 
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "bottom",
+    text = element_text(size = 8)
+  )
+
+legend <- get_legend(
+  # create some space to the left of the legend
+  comb.raa  + 
+    guides(color = guide_legend(nrow = 1)) +
+    theme(legend.position = "bottom")
+)
+
+int.p <- cowplot::plot_grid(
+  int.raw + theme(legend.position = 'none'), 
+  int.aaa + theme(legend.position = 'none'), 
+  int.raa + theme(legend.position = 'none'), 
+  int.iraa + theme(legend.position = 'none'), 
+  align = 'h',
+  ncol = 1
+) 
+
+ggsave("results/plots/int_bioage_res.png", plot = int.p , width = 9, height = 5.5, units = 'in')
+
+```
+
+```{r}
+all %>%
+  filter(str_detect(BioAge, "TL|CausAge")) %>%
+  select(outcome, BioAge, predictors, dataf) %>%
+  unnest(dataf) %>%
+  filter(str_detect(term, "tl|causage")) %>%
+  filter(!str_detect(term, "raa|aaa|iraa")) %>%
+  mutate(
+    estimate = round(estimate, 3), 
+    conf.low = signif(conf.low, 3),
+    conf.high = signif(conf.high, 3),
+    p = ifelse(p.value < 0.0001, insight::format_p(p.value, digits = "scientific2"), round(p.value, 3)),
+    out = glue("{estimate} [{conf.low}, {conf.high}], p = {p}"), 
+    out = str_replace(out, "p = p = ", "p = ")
+  ) %>%
+  filter(p < 0.05) %>%
+  select(outcome, BioAge, predictors, term, out) %>%
+  group_split(outcome) 
+
+
+all %>% filter(BioAge == "CausAge AAA", outcome == "PHC_MEM") %>% pull(res) %>% 
+  magrittr::extract2(1) %>%
+  plot_model(., type = "pred", terms = c("age_c", "causeage_aaa_bl"))
+
+all %>% filter(BioAge == "DNAmGrimAgev2 AAA", outcome == "PHC_MEM") %>% pull(res) %>% 
+  magrittr::extract2(1) %>%
+  plot_model(., type = "pred", terms = c("age_c", "grimage_aaa_bl"))
+```
+
+```{r}
+plot_causage <- function(Model) {
+  plot_model(Model, type = "pred", terms = c("months", "causage_bl")) +
+    theme_bw() + 
+    labs(color = "CausAge") + 
+    theme(
+      text = element_text(size = 8), 
+      legend.position = 'none', 
+      plot.title = element_blank()
+    )
+}
+
+plot_tl <- function(Model) {
+  plot_model(Model, type = "pred", terms = c("months", "z_tl_bl")) +
+    theme_bw() + 
+    labs(color = "TL") + 
+    theme(
+      text = element_text(size = 8), 
+      legend.position = 'none',
+      plot.title = element_blank()
+    )
+      
+}
+
+plot_mtcn <- function(Model) {
+  plot_model(Model, type = "pred", terms = c("months", "z_mtcn")) +
+    theme_bw() + 
+    labs(color = "mtDNAcn") + 
+    theme(
+      text = element_text(size = 8), 
+      legend.position = 'none',
+      plot.title = element_blank()
+    )
+      
+}
+
+estp <- all %>%
+  filter(str_detect(BioAge, "TL_CausAge_mtcn"), !str_detect(BioAge, "AAA|RAA|IRAA")) %>%
+  select(outcome, BioAge, predictors, res) %>%
+  mutate(
+    DNAm_p = map(res, plot_causage),
+    TL_p = map(res, plot_tl), 
+    mtcn_p = map(res, plot_mtcn)
+  ) 
+ 
+dnm_plots <- estp$DNAm_p  # Extract DNAm plots
+tl_plots <- estp$TL_p  # Extract TL plots
+mtcn_plots <- estp$mtcn_p  # Extract TL plots
+
+get_legend <- function(myplot) {
+  g <- ggplotGrob(myplot)
+  legend <- g$grobs[[which(sapply(g$grobs, function(x) x$name) == "guide-box")]]
+  return(legend)
+}
+
+dnam_leg <- get_legend(
+  dnm_plots[[1]] + 
+    theme(legend.position = 'bottom', legend.spacing = unit(0.1, "cm")) +
+    guides(color = guide_legend(title.position = "top"))
+  )
+tl_leg <- get_legend(
+  tl_plots[[1]] + theme(legend.position = 'bottom') +
+    guides(color = guide_legend(title.position = "top"))
+  )
+mtcn_leg <- get_legend(
+  mtcn_plots[[1]] + theme(legend.position = 'bottom') +
+    guides(color = guide_legend(title.position = "top"))
+  )
+
+png(filename = "~/Downloads/BioAge.png", width = 4, height = 8, units = 'in', res = 300)
+pageCreate(width = 4, height = 8, default.units = "inches")
+
+plotGG(
+    plot = dnam_leg,
+    x = 3, y = 7.7,
+    width = 0.1, height = 0.2, just = c("left", "top")
+)
+
+plotGG(
+    plot = tl_leg,
+    x = 0.9, y = 7.7,
+    width = 0.1, height = 0.2, just = c("left", "top")
+)
+
+plotGG(
+    plot = tl_plots[[1]] + labs(tag = 'A)'),
+    x = 0.0, y = 0,
+    width = 2, height = 1.9, just = c("left", "top")
+)
+
+plotGG(
+    plot = tl_plots[[2]] + labs(tag = 'B)'),
+    x = 0.0, y = 1.9,
+    width = 2, height = 1.9, just = c("left", "top")
+)
+
+plotGG(
+    plot = tl_plots[[3]] + labs(tag = 'C)'),
+    x = 0.0, y = 3.8,
+    width = 2, height = 1.9, just = c("left", "top")
+)
+
+plotGG(
+    plot = tl_plots[[4]] + labs(tag = 'D)'),
+    x = 0, y = 5.7,
+    width = 2, height = 1.9, just = c("left", "top")
+)
+
+
+plotGG(
+    plot = dnm_plots[[1]] + labs(tag = 'E)'),
+    x = 2, y = 0,
+    width = 2, height = 1.9, just = c("left", "top")
+)
+
+plotGG(
+    plot = dnm_plots[[2]] + labs(tag = 'F)'),
+    x = 2, y = 1.9,
+    width = 2, height = 1.9, just = c("left", "top")
+)
+
+plotGG(
+    plot = dnm_plots[[3]] + labs(tag = 'G)'),
+    x = 2, y = 3.8,
+    width = 2, height = 1.9, just = c("left", "top")
+)
+
+plotGG(
+    plot = dnm_plots[[4]] + labs(tag = 'H)'),
+    x = 2, y = 5.7,
+    width = 2, height = 1.9, just = c("left", "top")
+)
+
+pageGuideHide()
+dev.off()
+
+### Cowplots
+dnm_plots <- estp$DNAm_p  # Extract DNAm plots
+tl_plots <- estp$TL_p  # Extract TL plots
+
+main_pred.p = cowplot::plot_grid(
+  plotlist = c(estp$TL_p, estp$mtcn_p, estp$DNAm_p), 
+  align = 'h',
+  ncol = 4
+) 
+
+ggsave(glue("results/plots/main_bioage_pred_{DATE}.png"), plot = main_pred.p, width = 9, height = 4, units = 'in')
+
+main_pred_leg.p <- cowplot::plot_grid(
+  plotlist = c(
+    estp$TL_p[[4]] + theme(legend.position = 'right'), 
+    estp$mtcn_p[[4]] + theme(legend.position = 'right'), 
+    estp$DNAm_p[[4]] + theme(legend.position = 'right')
+    ), 
+  align = 'h',
+  ncol = 1
+) 
+
+ggsave(glue("results/plots/main_bioage_pred_leg_{DATE}.png"), plot = main_pred_leg.p, width = 9, height = 4, units = 'in')
+
+
+
+plot_tl(estp$DNAm_p[[1]])
+
+
+tl_plots <- estp$TL_p  # TL in the left column
+dnm_plots <- estp$DNAm_p  # DNAm (CausAge) in the right column
+
+# Function to extract legend from ggplot
+get_legend <- function(myplot) {
+  g <- ggplotGrob(myplot)
+  legend <- g$grobs[[which(sapply(g$grobs, function(x) x$name) == "guide-box")]]
+  return(legend)
+}
+
+dnam_p_legend <- get_legend(
+  # create some space to the left of the legend
+  estp$DNAm_p[[1]]  + 
+    guides(color = guide_legend(nrow = 1)) +
+    theme(legend.position = "bottom")
+)
+
+# Extract a common legend (from the first DNAm plot)
+common_legend <- get_legend(estp$DNAm_p[[1]])
+
+# Remove individual legends from each plot
+tl_plots <- lapply(tl_plots, function(p) p + theme(legend.position = "none"))
+dnm_plots <- lapply(dnm_plots, function(p) p + theme(legend.position = "none"))
+
+
+
+cowplot::plot_grid(plotlist = tl_plots, ncol = 1)
+dnam_p_legend
+
+# Create a multi-panel grid with TL on the left and DNAm on the right
+cowplot::plot_grid(
+  cowplot::plot_grid(plotlist = tl_plots, ncol = 1),  # Left column: TL plots
+  cowplot::plot_grid(plotlist = dnm_plots, ncol = 1),  # Right column: DNAm plots
+  dnam_p_legend,  # Common legend below
+  ncol = 2,  # Arrange plots in 2 columns (TL | DNAm)
+  rel_widths = c(1, 1)  # Equal width for both columns
+)
+
+```
+
+
+## Sandbox 
+```{r}
+fitlmer.00 <- lmer(PHC_MEM ~ age_c + (age_c  | RID), REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.00)
+
+fitlmer.01 <- lmer(PHC_VSP ~ months_c + (months_c  | RID), REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead", optCtrl = list(maxfun = 200000)), data = adni)
+summary(fitlmer.01)
+
+fitlmer.02a <- lmer(PHC_MEM ~ months + age_bl + sex + educ + dx_bl + apoe + z_tl_bl + (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.02a)
+
+fitlmer.02b <- lmer(PHC_MEM ~ months + age_bl + sex + educ + dx_bl + apoe + causage_bl + (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.02b)
+
+fitlmer.02c <- lmer(PHC_MEM ~ months + age_bl + sex + educ + dx_bl + apoe + z_mtcn + (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.02c)
+
+## Longitudional
+fitlmer.03a <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl + apoe*months + z_tl_bl*months + (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03a)
+plot_model(fitlmer.03a, type = "pred", terms = c("age_c", "z_tl_bl"))
+
+fitlmer.03b <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl + apoe*months + z_dnam_bl*months + (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03b)
+plot_model(fitlmer.03b, type = "pred", terms = c("age_c", "causage_bl"))
+
+fitlmer.03c <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl + apoe*months + z_mtcn*months + (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03c)
+plot_model(fitlmer.03c, type = "pred", terms = c("months", "z_mtcn"))
+
+fitlmer.03d <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl + apoe*months + z_tl_bl*months + causage_bl*months + z_mtcn*months + (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03d)
+plot_model(fitlmer.03d, type = "pred", terms = c("months", "z_tl_bl"))
+plot_model(fitlmer.03d, type = "pred", terms = c("months", "causage_bl"))
+plot_model(fitlmer.03d, type = "pred", terms = c("months", "z_mtcn"))
+
+## Interaction
+fitlmer.04a <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl + apoe*months + z_tl_bl*causage_bl*months + (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.04a)
+
+fitlmer.04b <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl + apoe*months + z_tl_bl*z_mtcn*months +  (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.04b)
+
+fitlmer.04c <- lmer(PHC_MEM ~ months_c + age_bl + sex + educ + cdrsb_bl + apoe*months_c + causage_bl*z_mtcn*months +  (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.04b)
+
+fitlmer.04d <- lmer(PHC_VSP ~ months_c + age_bl + sex + educ + cdrsb_bl + apoe*months_c + z_mtcn*z_tl_bl*z_dnam_bl*months_c + (months | RID), 
+                   REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni)
+summary(fitlmer.04d)
+PHC_VSP ~ months_c + age_bl + sex + educ + cdrsb_bl + apoe*months_c + z_tl_bl*z_dnam_bl*z_mtcn*months_c +  (months_c  | RID)
+PHC_VSP ~ months_c + age_bl + sex + educ + cdrsb_bl + apoe*months_c + z_mtcn*z_tl_bl*causage_bl*months_c + (months | RID)
+## APOE Interaction
+fitlmer.05a <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl +  z_tl_bl*apoe*months + (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.05a)
+
+fitlmer.05b <- lmer(PHC_MEM ~ months + age_bl + sex + educ + cdrsb_bl +  z_tl_bl + causage_bl*apoe*months + (months  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.05b)
+
+model_parameters(fitlmer.03, pretty_names = FALSE)
+broom.mixed::tidy(fitlmer.03)
+
+fitlmer.04 <- lmer(PHC_MEM ~ months + age_bl + sex + educ + causage_bl*apoe*months + (age_c  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.04)
+
+
+fitlmer.05 <- lmer(
+  PHC_MEM ~ months + age_bl + sex + educ + apoe * age_c + 
+    TL_BP_ADJ * age_c + CausAge * age_c + 
+    (1 + age_c + | RID), 
+  REML = FALSE, 
+  control = lmerControl(optimizer = "Nelder_Mead"), 
+  data = adni
+)
+
+summary(fitlmer.05)
+```
+
+### Comparing person time
+```{r}
+
+## Age Centered
+sdbx.01 <- lmer(gbl_cog ~ age_c + sex + educ + cdrsb_bl + apoe*age_c + z_dnam_bl*age_c + (age_c  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(sdbx.01)
+sdbx.01.p <- plot_model(sdbx.01, type = "pred", terms = c("age_c", "z_dnam_bl")) + 
+  scale_color_manual(values = c("#4DAF4A", "#377EB8", "#E41A1C")) + 
+  scale_fill_manual(values = c("#4DAF4A", "#377EB8", "#E41A1C")) + 
+  labs(
+    title = "Age Centered",
+    subtitle = "gbl_cog ~ age + DNAm*age_c + (age_c | RID)"
+  ) + 
+  theme_bw() + 
+  theme(
+    text = element_text(size = 8)
+  )
+sdbx.01.p
+
+## Months Centered, age at baseline 
+sdbx.02 <- lmer(gbl_cog ~ months_c + age_bl + sex + educ + cdrsb_bl*months_c + apoe*months_c + z_dnam_bl*months_c + (months_c  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(sdbx.02)
+sdbx.02.p <- plot_model(sdbx.02, type = "pred", terms = c("months_c", "z_dnam_bl")) + 
+  scale_color_manual(values = c("#4DAF4A", "#377EB8", "#E41A1C")) + 
+  scale_fill_manual(values = c("#4DAF4A", "#377EB8", "#E41A1C")) + 
+  labs(
+    title = "Months Centered, adjust for baseline age",
+    subtitle = "gbl_cog ~ months + age + DNAm*months + (months | RID)"
+  ) + 
+  theme_bw() + 
+  theme(
+    text = element_text(size = 8)
+  )
+sdbx.02.p
+
+## Months Centered, age at baseline 
+sdbx.03 <- lmer(gbl_cog ~ months_c + age_bl*months_c + sex + educ + cdrsb_bl*months_c + apoe*months_c + z_dnam_bl*months_c + (months_c  | RID), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(sdbx.03)
+sdbx.03.p <- plot_model(sdbx.03, type = "pred", terms = c("months_c", "z_dnam_bl")) + 
+  scale_color_manual(values = c("#4DAF4A", "#377EB8", "#E41A1C")) + 
+  scale_fill_manual(values = c("#4DAF4A", "#377EB8", "#E41A1C")) + 
+  labs(
+    title = "Months Centered, longitudional adjustment for baseline age",
+    subtitle = "gbl_cog ~ months + age*months + DNAm*months + (months | RID)"
+  ) + 
+  theme_bw() + 
+  theme(
+    text = element_text(size = 8)
+  )
+sdbx.03.p
+
+## Cowplot 
+
+legend <- get_legend(sdbx.01.p + theme(legend.position = "bottom"))
+
+# Remove legends from the individual plots
+sdbx.01.p <- sdbx.01.p + theme(legend.position = "none")
+sdbx.02.p <- sdbx.02.p + theme(legend.position = "none")
+sdbx.03.p <- sdbx.03.p + theme(legend.position = "none")
+
+# Arrange the three plots in one row
+plots_row <- plot_grid(sdbx.01.p, sdbx.02.p, sdbx.03.p, nrow = 1)
+
+# Add the shared legend below the row of plots
+final_plot <- plot_grid(plots_row, legend, ncol = 1, rel_heights = c(1, 0.1))
+
+# Print the final combined plot
+final_plot
+
+
+ggsave(glue("results/plots/lmm_PersonTime_{DATE}.png"), plot = final_plot, width = 9, height = 4, units = 'in')
+
+
+
+
+
+```
+

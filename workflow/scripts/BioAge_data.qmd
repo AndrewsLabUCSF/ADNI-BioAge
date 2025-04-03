@@ -1,0 +1,873 @@
+---
+title: "TL_DNAm_data"
+format: html
+editor: source
+editor_options: 
+  chunk_output_type: console
+---
+## Import
+
+```{r}
+library(tidyverse)
+library(easystats)
+library(broom)
+library(glue)
+library(plotgardener)
+library(lme4)
+library(lmerTest)
+library(sjPlot)
+library(gtsummary)
+setwd("~/gitcode/DNAm")
+`%nin%` = negate(`%in%`) 
+DATE = ymd(Sys.Date()) %>% str_replace_all("-", "")
+theme_gtsummary_compact()
+```
+
+## Munge
+
+### Endophenotypes
+
+```{r}
+merge.raw <- read_csv("resources/ADNI/ADNIMERGE_25Sep2023.csv")
+cog.raw <- read_csv("resources/ADNI/ADSP-PHC/Assessment_Analyses/ADSP_ADNI_Cognition_Dec2023/ADSP_PHC_COGN_Dec2023.csv")
+  
+dx_bl <- filter(cog.raw, PHC_Visit == 1) %>% 
+    mutate(
+    dx_bl = case_when(
+      PHC_Diagnosis == "1" ~ "CN", 
+      PHC_Diagnosis == "2" ~ "MCI", 
+      PHC_Diagnosis == "3" ~ "AD", 
+     ), 
+    dx_bl = fct_relevel(dx_bl, "CN", "MCI", "AD"), 
+  ) %>%
+    select(RID, dx_bl)
+
+
+```
+
+```{r}
+# Fluid Biomarkers
+## ~100 are missing fluid bm; ~200 fluid bm collected after genetics; ~200 collected at baseline, 66 collected before genetics
+fluid_bm.raw <- read_csv("resources/ADNI/ADSP-PHC/Biospecimen_Analyses/ADSP_PHC_CSF_Dec2023.csv")
+
+flbm <- fluid_bm.raw %>%
+  select(RID, VISCODE, DRAWDATE, PHC_Visit, Platform, PHC_AB42, PHC_Tau, PHC_pTau, AT_class)
+```
+
+```{r}
+mri.raw <- read_csv("resources/ADNI/ADSP-PHC/Image_Analyses/ADSP_ADNI_T1-Scalar_Dec2023v2/ADSP_PHC_T1-FS_Dec2023.csv")
+
+mri <- mri.raw %>%
+  select(RID, SUBJID, PHASE, VISCODE, VISCODE2, SCANDATE, PHC_Visit, PHC_Age_T1,PHC_ScannerBatchName, PHC_LONIUID, PHC_ScanID,
+    PHC_ScannerBatchName.1, PHC_ScannerManufacturer, PHC_FieldSgth, EstimatedTotalIntraCranialVol_combat, 
+    rh_entorhinal_thickness_combat, lh_entorhinal_thickness_combat,
+    rh_fusiform_thickness_combat, rh_fusiform_thickness_combat,
+    rh_inferiortemporal_thickness_combat, lh_inferiortemporal_thickness_combat,
+    rh_middletemporal_thickness_combat, lh_middletemporal_thickness_combat,
+    rh_inferiorparietal_thickness_combat, lh_inferiorparietal_thickness_combat,
+    rh_precuneus_thickness_combat, lh_precuneus_thickness_combat, 
+    Right.Hippocampus_combat, Left.Hippocampus_combat,
+    Right.Amygdala_combat, Left.Amygdala_combat,
+    rh_entorhinal_volume_combat, lh_entorhinal_volume_combat,
+    rh_middletemporal_volume_combat, lh_middletemporal_volume_combat,
+    rh_inferiortemporal_volume_combat, lh_inferiortemporal_volume_combat,
+    rh_temporalpole_volume_combat, lh_temporalpole_volume_combat,
+ ) %>%
+  mutate(
+    ## Cortical Thickness
+    ent_thk = rowMeans(across(c(rh_entorhinal_thickness_combat, lh_entorhinal_thickness_combat)), na.rm = FALSE),
+    fus_thk = rowMeans(across(c(rh_fusiform_thickness_combat, rh_fusiform_thickness_combat)), na.rm = FALSE),
+    ift_thk = rowMeans(across(c(rh_inferiortemporal_thickness_combat, lh_inferiortemporal_thickness_combat)), na.rm = FALSE),
+    mt_thk = rowMeans(across(c(rh_middletemporal_thickness_combat, lh_middletemporal_thickness_combat)), na.rm = FALSE),
+    ifp_thk = rowMeans(across(c(rh_inferiorparietal_thickness_combat, lh_inferiorparietal_thickness_combat)), na.rm = FALSE),
+    pcun_thk = rowMeans(across(c(rh_precuneus_thickness_combat, lh_precuneus_thickness_combat)), na.rm = FALSE),
+    cort_thk = rowMeans(across(c(ent_thk, fus_thk, ift_thk, mt_thk, ifp_thk, pcun_thk)), na.rm = FALSE),
+    ## GM Volume
+    hipp_vol = rowMeans(across(c(Right.Hippocampus_combat, Left.Hippocampus_combat)), na.rm = FALSE),
+    amyg_vol = rowMeans(across(c(Right.Amygdala_combat, Left.Amygdala_combat)), na.rm = FALSE),
+    ent_vol = rowMeans(across(c(rh_entorhinal_volume_combat, lh_entorhinal_volume_combat)), na.rm = FALSE),
+    mt_vol = rowMeans(across(c(rh_middletemporal_volume_combat, lh_middletemporal_volume_combat)), na.rm = FALSE),
+    ift_vol = rowMeans(across(c(rh_inferiortemporal_volume_combat, lh_inferiortemporal_volume_combat)), na.rm = FALSE),
+    tpol_vol = rowMeans(across(c(rh_temporalpole_volume_combat, lh_temporalpole_volume_combat)), na.rm = FALSE),
+    gm_vol = rowSums(across(c(hipp_vol, amyg_vol, ent_vol, mt_vol, ift_vol, tpol_vol)), na.rm = FALSE),
+  )
+ 
+```
+
+### Methylation
+
+```{r}
+## Mythylation
+map.raw <- readxl::read_xlsx("resources/ADNI/ADNI_DNA_Methylation_SampleAnnotation_20170530.xlsx") %>%
+  mutate(Edate = as.Date(Edate))
+clocks.raw <- read_csv("intermediate/adni_epiclocks_240826.csv") %>%
+  rename(barcodes = '...1' ) 
+deconv6.raw <- read_csv("intermediate/DeconvoluteBloodEPIC_results.csv") %>%
+  rename(barcodes = '...1' ) %>%
+  pivot_longer(cols = -barcodes, names_to = "Sample", values_to = "Value") %>%
+  pivot_wider(names_from = barcodes, values_from = Value)
+deconv12.raw <- read_csv("intermediate/TwelveCellDeconvoluteBloodEPIC_results.csv") %>%
+  rename(barcodes = '...1' ) %>%
+  pivot_longer(cols = -barcodes, names_to = "Sample", values_to = "Value") %>%
+  pivot_wider(names_from = barcodes, values_from = Value)
+
+dnam.raw <- map.raw %>%
+  dplyr::select(barcodes, RID, Phase,  Edate, DateDrawn, PlateNumber, Array) %>%
+  rename(Phase_methy = Phase,  Edate_methy = Edate, DateDrawn_methy = DateDrawn) %>%
+  arrange(RID, Edate_methy, PlateNumber) %>%
+  left_join(clocks.raw, by = 'barcodes') %>%
+  left_join(deconv6.raw, by = c('barcodes' = 'Sample')) %>%
+  # left_join(deconv12.raw, by = c('barcodes' = 'Sample')) %>%
+  left_join(select(cog.raw, RID, EXAMDATE, PHC_Age_Cognition, PHC_Sex, PHC_Diagnosis), by = c("RID", 'Edate_methy' = "EXAMDATE")) %>%
+  relocate(RID, Edate_methy, PHC_Age_Cognition, PHC_Sex, PHC_Diagnosis) %>%
+  select(-Age) %>%
+  rename(Age = PHC_Age_Cognition, dx = PHC_Diagnosis, sex = PHC_Sex) %>%
+  mutate(
+      dx = case_when(
+        dx == 1 ~ "CN",
+        dx == 2 ~ "MCI",
+        dx == 3 ~ "AD",
+   ),
+  )
+
+dnam <- dnam.raw %>% 
+  group_by(RID, Edate_methy) %>%
+  distinct(RID, .keep_all = T) %>%
+  group_by(RID) %>%
+  slice(1:3)%>%
+  ungroup() %>%
+  dplyr::select(-Age)
+
+```
+
+### Telomeres
+- TL_BP_ADJ: Telomere length / Single copy gene (T/S) ratio of DNA from blood, adjusted for logistical confounders
+
+```{r}
+## Telomere Ration
+ts.raw <- read_csv("resources/ADNI/TS_RATIO_ADJ_23Aug2024.csv")
+
+ts <- ts.raw %>% 
+  arrange(RID, EXAM_DATE) %>%
+  group_by(RID, EXAM_DATE) %>%
+  distinct(RID, .keep_all = T) %>%
+  group_by(RID) %>%
+  slice(1:3) %>%
+  ungroup() 
+  
+```
+
+### mtDNAcn 
+```{r}
+load('resources/ADNI/BioAge/adni_mtcn.RData')
+mtDNAcn.raw <- dat_adni
+mtdnacn <- mtDNAcn.raw %>% 
+  dplyr::select(RID, mtcn) %>%
+  as_tibble() %>%
+  mutate(
+    RID = as.numeric(RID)
+  )
+## TODO merge in mtDNAcn 
+```
+
+### APOE
+
+```{r}
+## APOE 
+apoe.raw <- read_csv('resources/ADNI/APOERES_15Nov2023.csv')
+apoe <- apoe.raw %>%
+  unite(apoe_geno, c(APGEN1, APGEN2), sep = "") %>%
+  mutate(
+    apoe = case_when(
+      apoe_geno == "22" ~ "e2+", 
+      apoe_geno == "23" ~ "e2+", 
+      apoe_geno == "24" ~ "e4+", 
+      apoe_geno == "33" ~ "e3/e3", 
+      apoe_geno == "34" ~ "e4+", 
+      apoe_geno == "44" ~ "e4+", 
+    ), 
+    apoe = fct_relevel(apoe, "e3/e3"), 
+  ) %>%
+   fastDummies::dummy_cols(select_columns = "apoe", remove_most_frequent_dummy = T) %>%
+  rename(apoe_e2 = `apoe_e2+`, apoe_e4 = `apoe_e4+`)
+  
+ 
+```
+
+### Smoking 
+```{r}
+### Medical history 
+med_hist.raw <- read_csv('resources/ADNI/RECMHIST_12Jan2024.csv') %>%
+  janitor::clean_names()
+init_health.raw <- read_csv('resources/ADNI/INITHEALTH_12Jan2024.csv') %>%
+  janitor::clean_names()
+
+### smoking
+med_hist <- med_hist.raw %>%
+  select(phase, rid, ptid, viscode2, visdate, mhnum, mhcur, mhstab) %>%
+  group_by(rid) %>%
+  slice_min(visdate) %>%
+  ungroup() %>%
+  mutate(
+    smk = ifelse(mhnum == 16, 1, 0)
+  ) %>%
+  group_by(rid) %>%
+  summarise(ptid = first(ptid), viscode2 = first(viscode2), visdate = first(visdate), phase = first(phase), smk = sum(smk, na.rm = T)) %>%
+  mutate(
+    smk = ifelse(smk == 2, 1, smk)
+  )
+
+init_health <- init_health.raw %>%
+  select(phase, rid, ptid, viscode2, visdate, ihsymptom) %>%
+  group_by(rid) %>%
+  slice_min(visdate) %>%
+  ungroup() %>%
+  mutate(
+    smk = ifelse(ihsymptom == 14, 1, 0)
+  ) %>%
+  group_by(rid) %>%
+  summarise(ptid = first(ptid), viscode2 = first(viscode2), visdate = first(visdate), phase = first(phase), smk = sum(smk, na.rm = T)) %>%
+  mutate(
+    smk = ifelse(smk >= 2, 1, smk)
+  )
+
+smk <- bind_rows(
+  med_hist, init_health
+) %>%
+  group_by(rid) %>%
+  slice_min(visdate) %>%
+  ungroup() %>%
+  filter(viscode2 %in% c('f', 'sc')) %>%
+  rename(RID = rid)
+
+```
+
+## Merge 
+```{r}
+
+tl.merge <- ts %>% select(RID, EXAM_DATE, TL_BP_ADJ)
+
+dnam.merge <- dnam %>% select(
+  RID, Edate_methy, 
+  PhenoAge, Horvathv2, Hannum, Lin, DNAmGrimAgev2, AgeAccelGrimv2, CausAge,  DamAge, AdaptAge, DunedinPACE, 
+  neutrophil, nk_cell, b_cell, cd4_t_cell, cd8_t_cell, monocyte, 
+  # Bas, Bmem, Bnv, CD4mem, CD4nv, CD8mem, CD8nv, Eos, Mono, NK, Neu, Treg
+  )
+
+apoe.merge <- apoe %>% select(RID, apoe_geno, apoe, apoe_e2, apoe_e4)
+
+cog.merge <- cog.raw %>% 
+  # filter(RID %in% tl.merge$RID) %>%
+  select(RID, VISCODE2, EXAMDATE, PHC_Visit, PHC_Sex, PHC_Education, PHC_Ethnicity, PHC_Race, PHC_Age_Cognition, PHC_Diagnosis, 
+         PHC_MEM, PHC_EXF, PHC_LAN, PHC_VSP)
+
+fbm.merge <- fluid_bm.raw %>% 
+  arrange(RID, PHC_Visit) %>%
+  select(RID, PHC_Visit, DRAWDATE, Platform, PHC_AB42, PHC_Tau, PHC_pTau, AT_class)
+ 
+mri.merge <- mri %>% 
+  arrange(RID, PHC_Visit) %>%
+  distinct(RID, PHC_Visit, .keep_all = TRUE) %>%
+  select(RID, PHC_Visit, PHC_ScannerBatchName.1, PHC_ScannerManufacturer, PHC_FieldSgth, EstimatedTotalIntraCranialVol_combat, cort_thk, gm_vol)
+
+```
+
+
+### Genetics 
+```{r}
+
+genetics <- cog.merge %>% 
+  select(RID, PHC_Visit, EXAMDATE, PHC_Age_Cognition) %>%
+  left_join(tl.merge, by = c("RID", 'EXAMDATE' = "EXAM_DATE")) %>% 
+  left_join(dnam.merge, by = c("RID", 'EXAMDATE' = 'Edate_methy'))  %>% 
+  left_join(apoe.merge, by = c("RID")) %>% 
+  left_join(mtdnacn, by = c("RID")) 
+
+## Estimate epigenetic age acceleration
+epi_age_acc <- genetics %>%
+  select(RID, PHC_Visit, EXAMDATE, PHC_Age_Cognition, 
+        TL_BP_ADJ, mtcn,
+        CausAge, DamAge, AdaptAge, PhenoAge, Horvathv2, Hannum, Lin, DNAmGrimAgev2, DunedinPACE, AgeAccelGrimv2,
+        neutrophil, nk_cell, b_cell, cd4_t_cell, cd8_t_cell, monocyte
+        # Bas, Bmem, Bnv, CD4mem, CD4nv, CD8mem, CD8nv, Eos, Mono, NK, Neu, Treg
+        ) %>%
+  filter(!is.na(CausAge)) %>%
+  group_by(RID) %>%
+  slice_min(EXAMDATE) %>%
+  ungroup() %>%
+  mutate(
+    causeage_aaa_bl = CausAge - PHC_Age_Cognition, 
+    damage_aaa_bl = DamAge - PHC_Age_Cognition, 
+    adptage_aaa_bl = AdaptAge - PHC_Age_Cognition, 
+    phenoage_aaa_bl = PhenoAge - PHC_Age_Cognition, 
+    horvath_aaa_bl = Horvathv2 - PHC_Age_Cognition, 
+    hannum_aaa_bl = Hannum - PHC_Age_Cognition, 
+    lin_aaa_bl = Lin - PHC_Age_Cognition, 
+    grimage_aaa_bl = DNAmGrimAgev2 - PHC_Age_Cognition, 
+  ) 
+
+raa_causage_mod <- lm(CausAge ~ PHC_Age_Cognition, data = epi_age_acc)
+raa_phenoage_mod <- lm(PhenoAge ~ PHC_Age_Cognition, data = epi_age_acc)
+raa_horvath_mod <- lm(Horvathv2 ~ PHC_Age_Cognition, data = epi_age_acc)
+raa_hannum_mod <- lm(Hannum ~ PHC_Age_Cognition, data = epi_age_acc)
+raa_lin_mod <- lm(Lin ~ PHC_Age_Cognition, data = epi_age_acc)
+raa_grimage_mod <- lm(DNAmGrimAgev2 ~ PHC_Age_Cognition, data = epi_age_acc)
+
+iraa_causage_mod <- lm(CausAge ~ PHC_Age_Cognition + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell, data = epi_age_acc)
+iraa_phenoage_mod <- lm(PhenoAge ~ PHC_Age_Cognition + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell, data = epi_age_acc)
+iraa_horvath_mod <- lm(Horvathv2 ~ PHC_Age_Cognition + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell, data = epi_age_acc)
+iraa_hannum_mod <- lm(Hannum ~ PHC_Age_Cognition + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell, data = epi_age_acc)
+iraa_lin_mod <- lm(Lin ~ PHC_Age_Cognition + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell, data = epi_age_acc)
+iraa_grimage_mod <- lm(DNAmGrimAgev2 ~ PHC_Age_Cognition + neutrophil + nk_cell + b_cell + cd4_t_cell + cd8_t_cell, data = epi_age_acc)
+
+# iraa_causage_mod <- lm(CausAge ~ PHC_Age_Cognition +  Bas + Bmem + Bnv + CD4mem + CD4nv + CD8mem + CD8nv + Eos + NK + Neu + Treg, 
+#   data = epi_age_acc)
+# iraa_phenoage_mod <- lm(PhenoAge ~ PHC_Age_Cognition +  Bas + Bmem + Bnv + CD4mem + CD4nv + CD8mem + CD8nv + Eos + NK + Neu + Treg, 
+#   data = epi_age_acc)
+# iraa_horvath_mod <- lm(Horvathv2 ~ PHC_Age_Cognition +  Bas + Bmem + Bnv + CD4mem + CD4nv + CD8mem + CD8nv + Eos + NK + Neu + Treg, 
+#   data = epi_age_acc)
+# iraa_hannum_mod <- lm(Hannum ~ PHC_Age_Cognition +  Bas + Bmem + Bnv + CD4mem + CD4nv + CD8mem + CD8nv + Eos + NK + Neu + Treg, 
+#   data = epi_age_acc)
+# iraa_lin_mod <- lm(Lin ~ PHC_Age_Cognition +  Bas + Bmem + Bnv + CD4mem + CD4nv + CD8mem + CD8nv + Eos + NK + Neu + Treg, 
+#   data = epi_age_acc)
+# iraa_grimage_mod <- lm(DNAmGrimAgev2 ~ PHC_Age_Cognition +  Bas + Bmem + Bnv + CD4mem + CD4nv + CD8mem + CD8nv + Eos + NK + Neu + Treg, 
+#   data = epi_age_acc)
+
+raa_mod <- list(
+  CausAge = raa_causage_mod, 
+  PhenoAge = raa_phenoage_mod, 
+  Horvathv2 = raa_horvath_mod, 
+  Hannum = raa_hannum_mod, 
+  Lin = raa_lin_mod, 
+  DNAmGrimAgev2 = raa_grimage_mod
+  ) %>%
+  map_df(tidy, .id = "test") %>%
+    mutate(
+    term = case_when(
+      term == "(Intercept)" ~ "Intercept",
+      term == "PHC_Age_Cognition" ~ "Slope",
+      TRUE ~ term  # Keep other terms unchanged
+    ))
+
+
+epi_age_acc$causage_raa_bl <- residuals(raa_causage_mod)
+epi_age_acc$phenoage_raa_bl <- residuals(raa_phenoage_mod)
+epi_age_acc$horvath_raa_bl <- residuals(raa_horvath_mod)
+epi_age_acc$hannum_raa_bl <- residuals(raa_hannum_mod)
+epi_age_acc$lin_raa_bl <- residuals(raa_lin_mod)
+epi_age_acc$grimage_raa_bl <- residuals(raa_grimage_mod)
+
+epi_age_acc$causage_iraa_bl <- residuals(iraa_causage_mod)
+epi_age_acc$phenoage_iraa_bl <- residuals(iraa_phenoage_mod)
+epi_age_acc$horvath_iraa_bl <- residuals(iraa_horvath_mod)
+epi_age_acc$hannum_iraa_bl <- residuals(iraa_hannum_mod)
+epi_age_acc$lin_iraa_bl <- residuals(iraa_lin_mod)
+epi_age_acc$grimage_iraa_bl <- residuals(iraa_grimage_mod)
+
+genetics_bl <- epi_age_acc %>%
+  rename(
+    tl_bl = TL_BP_ADJ, 
+    mtcn_bl = mtcn,
+    causage_bl = CausAge, 
+    adptage_bl = AdaptAge, 
+    damage_bl = DamAge, 
+    phenoage_bl = PhenoAge, 
+    horvath_bl = Horvathv2, 
+    hannum_bl = Hannum, 
+    lin_bl = Lin, 
+    grimage_bl = DNAmGrimAgev2, 
+    ageaccelgrim_bl = AgeAccelGrimv2, 
+    dunedinpace_bl = DunedinPACE, 
+    neutrophil_bl = neutrophil, 
+    nk_cell_bl = nk_cell, 
+    b_cell_bl = b_cell, 
+    cd4_t_cell_bl = cd4_t_cell, 
+    cd8_t_cell_bl = cd8_t_cell, 
+    monocyte_bl = monocyte
+    ) %>%
+  mutate( # Standardize BioAge measures
+   z_tl_bl = scale(tl_bl)[,1], 
+   z_mtcn_bl = scale(mtcn_bl)[,1],
+   z_dnam_bl = scale(causage_bl)[,1], 
+  ) %>%
+    select(RID, EXAMDATE, contains('bl'))
+
+
+genetics.merge <- genetics %>%
+  left_join(genetics_bl, by = c("RID", 'EXAMDATE')) %>% 
+  # select(RID, PHC_Visit, TL_BP_ADJ) %>%
+  group_by(RID) %>%
+  fill(tl_bl, .direction = "down") %>%
+  fill(mtcn_bl, .direction = "down") %>%
+  fill(causage_bl, .direction = "down") %>%
+  fill(adptage_bl, .direction = "down") %>%
+  fill(damage_bl, .direction = "down") %>%
+  fill(phenoage_bl, .direction = "down") %>%
+  fill(horvath_bl, .direction = "down") %>%
+  fill(hannum_bl, .direction = "down") %>%
+  fill(lin_bl, .direction = "down") %>%
+  fill(grimage_bl, .direction = "down") %>%
+  fill(ageaccelgrim_bl, .direction = "down") %>%
+  fill(dunedinpace_bl, .direction = "down") %>%
+  fill(neutrophil_bl, .direction = "down") %>%
+  fill(nk_cell_bl, .direction = "down") %>%
+  fill(b_cell_bl, .direction = "down") %>%
+  fill(cd4_t_cell_bl, .direction = "down") %>%
+  fill(cd8_t_cell_bl, .direction = "down") %>%
+  fill(monocyte_bl, .direction = "down") %>%
+  fill(causeage_aaa_bl, .direction = "down") %>%
+  fill(phenoage_aaa_bl, .direction = "down") %>%
+  fill(horvath_aaa_bl, .direction = "down") %>%
+  fill(hannum_aaa_bl, .direction = "down") %>%
+  fill(lin_aaa_bl, .direction = "down") %>%
+  fill(grimage_aaa_bl, .direction = "down") %>%
+  fill(adptage_aaa_bl, .direction = "down") %>%
+  fill(damage_aaa_bl, .direction = "down") %>%
+  fill(causage_raa_bl, .direction = "down") %>%
+  fill(phenoage_raa_bl, .direction = "down") %>%
+  fill(horvath_raa_bl, .direction = "down") %>%
+  fill(hannum_raa_bl, .direction = "down") %>%
+  fill(lin_raa_bl, .direction = "down") %>%
+  fill(grimage_raa_bl, .direction = "down") %>%
+  fill(causage_iraa_bl, .direction = "down") %>%
+  fill(phenoage_iraa_bl, .direction = "down") %>%
+  fill(horvath_iraa_bl, .direction = "down") %>%
+  fill(hannum_iraa_bl, .direction = "down") %>%
+  fill(lin_iraa_bl, .direction = "down") %>%
+  fill(grimage_iraa_bl, .direction = "down") %>%
+  fill(z_tl_bl, .direction = "down") %>%
+  fill(z_mtcn_bl, .direction = "down") %>%
+  fill(z_dnam_bl, .direction = "down") %>%
+  fill(apoe, .direction = "updown") %>%
+  fill(apoe, .direction = "down") %>%
+  ungroup()
+
+```
+
+
+### Cogntive Decline 
+```{r}
+
+## Might need to filter this to omics bl
+mean_age <- filter(cog.merge, PHC_Visit == 1) %>% summarise(age = mean(PHC_Age_Cognition, na.rm = T)) %>% pull(age)
+mean_visits = filter(cog.merge, PHC_Visit == 1) %>% summarise(age = mean(PHC_Age_Cognition, na.rm = T)) %>% pull(age)
+
+adni <- cog.merge %>%
+  left_join(select(merge.raw, RID, EXAMDATE, ORIGPROT, CDRSB), by = c("RID", 'EXAMDATE')) %>%
+  left_join(select(smk, RID, smk), by = c("RID")) %>%
+  left_join(fbm.merge, by = c('RID', 'PHC_Visit')) %>%
+  left_join(mri.merge, by = c('RID', 'PHC_Visit')) %>%
+  # left_join(dx_bl, by = c("RID")) %>%
+  left_join(select(genetics.merge, -PHC_Age_Cognition, -PHC_Visit), by = c("RID", 'EXAMDATE')) %>%
+  mutate(
+    age_c = PHC_Age_Cognition - mean_age, 
+    sex = ifelse(PHC_Sex == 1, "Male", "Female"), 
+    gbl_cog = rowMeans(across(c(PHC_MEM, PHC_EXF, PHC_LAN, PHC_VSP)), na.rm = TRUE)
+  ) %>%
+  filter(!is.na(apoe)) %>%
+  # filter(!is.na(CausAge)) %>%
+  filter(!is.na(causage_bl)) %>%
+  ## Exclude participants with only 1 visit
+  # filter(n() > 1) %>%
+  # Baseline Diagnosis
+  group_by(RID) %>%
+  mutate( # Months from baseline genetics visit
+    baseline_date = min(EXAMDATE, na.rm = TRUE),  # Get earliest EXAMDATE per RID (baseline)
+    months_since_bl = as.numeric(difftime(EXAMDATE, baseline_date, units = "days")) / 30.4375,  # Convert days to months
+    age_bl = min(PHC_Age_Cognition, na.rm = TRUE),
+    visit_bl = first(PHC_Visit), 
+  ) %>%
+  mutate(
+    cdrsb_bl = case_when(
+      PHC_Visit == min(PHC_Visit) ~ CDRSB
+      ), 
+    dx_bl = case_when(
+      PHC_Visit == min(PHC_Visit) ~ PHC_Diagnosis
+      ), 
+    dx_bl = case_when(
+     dx_bl == 1 ~ "CN",
+     dx_bl == 2 ~ "MCI",
+     dx_bl == 3 ~ "AD",
+   ),
+    dx_bl = fct_relevel(dx_bl, "CN", "MCI", "AD"), 
+    ORIGPROT = fct_relevel(ORIGPROT, "ADNI1", "ADNI2", "ADNIGO")
+  ) %>% 
+  fill(dx_bl, .direction = "down") %>%
+  fill(cdrsb_bl, .direction = "down") %>%
+  # filter(dx_bl != "AD") %>%
+  # filter(dx_bl != "CN") %>%
+  ungroup() %>%
+  rename(
+    educ = PHC_Education, 
+    months = months_since_bl, 
+    cohort = ORIGPROT
+  ) %>%
+  relocate(age_bl, .after = PHC_Age_Cognition) %>%
+  relocate(months, .after = PHC_Visit) %>%
+  relocate(cohort, .after = RID) %>% 
+  relocate(cdrsb_bl, .after = CDRSB) %>%
+  relocate(dx_bl, .after = PHC_Diagnosis)  %>%
+  relocate(visit_bl, .after = PHC_Visit) 
+
+## Center time variable
+mean_months <- mean(adni$months, na.rm = TRUE)
+adni <- adni %>% 
+  mutate(
+    months_c = months - mean_months
+  ) %>% 
+    relocate(months_c, .after = months)
+
+```
+
+### NeuroImaging 
+```{r}
+mri.df <- adni %>%
+  select(RID, cohort, VISCODE2, EXAMDATE, PHC_Visit, visit_bl, months, PHC_Sex, PHC_Age_Cognition, age_bl, cdrsb_bl, educ, apoe, mtcn_bl, neutrophil_bl, nk_cell_bl,  b_cell_bl, cd4_t_cell_bl, cd8_t_cell_bl, monocyte_bl, smk, causage_bl, tl_bl, PHC_ScannerBatchName.1, PHC_ScannerManufacturer, PHC_FieldSgth, EstimatedTotalIntraCranialVol_combat, cort_thk, gm_vol) %>%
+  group_by(RID) %>%
+  filter(!all(is.na(EstimatedTotalIntraCranialVol_combat))) %>%
+  filter(!is.na(EstimatedTotalIntraCranialVol_combat)) %>%
+  slice_max(PHC_Visit) %>%
+  ungroup() %>%
+  filter(visit_bl != PHC_Visit) %>%
+  rename(sex = PHC_Sex, age = PHC_Age_Cognition) %>%
+  mutate(
+    PHC_FieldSgth = as.factor(PHC_FieldSgth)
+  )
+```
+
+### Fluid Biomarkers
+```{r}
+
+flbm.df <- adni %>%
+  select(RID, cohort, VISCODE2, EXAMDATE, PHC_Visit, PHC_Sex, PHC_Age_Cognition, CDRSB, educ, apoe, smk, DRAWDATE, Platform, PHC_AB42, PHC_Tau, PHC_pTau, AT_class, mtcn, CausAge, TL_BP_ADJ, neutrophil, nk_cell,  b_cell, cd4_t_cell, cd8_t_cell, monocyte) %>% 
+  group_by(RID) %>%
+  filter(!all(is.na(AT_class))) %>% 
+  # ungroup() %>% select(RID, PHC_Visit, PHC_AB42, PHC_Tau, PHC_pTau, AT_class, mtcn, CausAge, TL_BP_ADJ) %>% View()
+  mutate(
+    # mtcn = ifelse(PHC_Visit > min(PHC_Visit), NA, mtcn)
+  ) %>%
+  ungroup() %>%
+  filter(!is.na(AT_class)) %>%
+  rename(sex = PHC_Sex, age = PHC_Age_Cognition, cdrsb = CDRSB)
+
+
+```
+
+
+## Export
+```{r}
+write_csv(adni, 'intermediate/adni.csv')
+write_csv(mri.df, 'intermediate/mri.csv')
+write_csv(flbm.df, 'intermediate/flbm.csv')
+
+```
+
+## Descriptives 
+### Table 1
+```{r}
+## Baseline 
+adni_d <- adni %>%
+  group_by(RID) %>%
+  summarise(
+    PHC_Visit = first(PHC_Visit),
+    n_visit = n(),
+    cohort = first(cohort),
+    age = first(PHC_Age_Cognition), 
+    sex = first(sex),
+    educ = first(educ),
+    cdrsb = first(cdrsb_bl),
+    dx = first(PHC_Diagnosis),
+    TL = first(TL_BP_ADJ), 
+    mtDNAcn = first(mtcn), 
+    PhenoAge = first(PhenoAge), 
+    Horvathv2 = first(Horvathv2), 
+    Hannum = first(Hannum),     
+    Lin = first(Lin), 
+    CausAge = first(CausAge), 
+    # AdaptAge = first(AdaptAge), 
+    # DamAge = first(DamAge), 
+    DNAmGrimAgev2 = first(DNAmGrimAgev2), 
+    AgeAccelGrimv2 = first(AgeAccelGrimv2), 
+    DunedinPACE = first(DunedinPACE), 
+    nk_cell = first(nk_cell), 
+    b_cell = first(b_cell), 
+    cd4_t_cell = first(cd4_t_cell), 
+    cd8_t_cell_bl = first(cd8_t_cell_bl),
+    monocyte = first(monocyte),
+    neutrophil = first(neutrophil),     
+    CausAge = first(CausAge), 
+    gbl_cog = first(gbl_cog), 
+    PHC_MEM = first(PHC_MEM), 
+    PHC_EXF = first(PHC_EXF), 
+    PHC_LAN = first(PHC_LAN), 
+    PHC_VSP = first(PHC_VSP), 
+   # aaa = first(aaa), 
+    # raa = first(raa_bl)
+  ) %>%
+    ungroup() %>%
+  mutate(
+    dx = case_when(
+     dx == 1 ~ "CN",
+     dx == 2 ~ "MCI",
+     dx == 3 ~ "AD",
+   ),
+   dx = fct_relevel(dx, "CN", "MCI", "AD")
+  ) %>%
+  left_join(select(mri.df, RID, cort_thk, gm_vol)) %>%
+  left_join(select(flbm.df, RID, PHC_AB42, PHC_Tau, PHC_pTau))
+
+describe_distribution(adni_d)
+
+## GT-summary
+tbl1 <- adni_d %>% 
+  select(-RID, -PHC_Visit) %>%
+  tbl_summary(
+    ., by = dx, 
+    missing = "no",
+    statistic = list(
+    all_continuous() ~ "{mean} ({sd})",
+    all_categorical() ~ "{n} ({p}%)"
+    ),
+  ) %>%
+    gtsummary::add_n() 
+
+tbl1
+
+## Export
+tbl1 |> 
+  as_gt() |> 
+  gt::gtsave("results/tbl1.docx")
+
+
+## Participants were baseline != 0 
+adni_d %>% 
+  filter(PHC_Visit != 1) %>%
+  summarise(
+    visits = mean(PHC_Visit), 
+    visits_sd = sd(PHC_Visit)
+  )
+
+```
+
+### Correlations
+```{r}
+## Corelations 
+### Corr-test
+res_cor <- adni_d %>%
+  select(
+    # BioAge
+    age, TL, mtDNAcn, CausAge, PhenoAge, Horvathv2, Hannum, Lin, DNAmGrimAgev2, AgeAccelGrimv2, DunedinPACE, 
+    # AD Endophenotypes
+    gbl_cog, cort_thk, gm_vol, PHC_AB42, PHC_Tau, PHC_pTau
+    ) %>%
+  correlation(
+    p_adjust = 'fdr'
+  )
+summary(res_cor)
+
+BioAge_corr.p <- summary(res_cor) %>% 
+  plot() + 
+    theme_bw(
+      base_size = 15,
+    ) + 
+    theme(
+      text = element_text(size = 8), 
+      axis.text.x = element_text(angle = 25, hjust = 1) 
+    )
+BioAge_corr.p
+ggsave(glue("results/plots/bioag_corrplot_{DATE}.png"), plot = BioAge_corr.p, width = 11, height = 6, units = 'in')
+
+```
+
+### Age vs BioAge 
+```{r}
+
+### Age vs DNAm
+dnam.p <-  adni_d %>%
+  select(age, dx, CausAge, PhenoAge, Horvathv2, Hannum, Lin, 
+         DNAmGrimAgev2, AgeAccelGrimv2, DunedinPACE, TL, mtDNAcn) %>%
+  pivot_longer(
+    cols = c(
+      PhenoAge, Horvathv2, Hannum, Lin, DNAmGrimAgev2, CausAge, TL, mtDNAcn
+      # Zhang_10, DunedinPoAm38, AgeAccelGrimv1, AgeAccelGrimv2
+    ),
+    names_to = 'clock', 
+    values_to = 'DNAm'
+  ) 
+  
+bioage_lm.p <- ggplot(dnam.p %>% filter(clock %nin% c('TL', 'mtDNAcn')), aes(x = age, y = DNAm)) + 
+  facet_wrap(facets = vars(clock)) + 
+  geom_point(size = 0.75) + 
+  geom_abline(slope = 1, intercept = 0, color = 'blue', linetype = 2, size = 1) + 
+  geom_smooth(method = 'lm', se = F, color = 'red', linetype = 2, linewidth = 1) + 
+  scale_color_brewer(palette = "Set1") +
+  theme_bw() + 
+  labs(
+    x = "Chronological Age (Years)",
+    y = "DNA Methylation Age",
+    color = "Model Type",
+    # title = "Comparison of Age and Epigenetic Clocks",
+    caption = "Blue: AAA (Fixed Slope = 1), Red: RAA (Linear Fit)"
+  ) + 
+  theme(
+    strip.text = element_text(size = 12, face = "bold"), 
+    strip.background = element_blank(),
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+bioage_lm.p 
+
+ggsave("results/plots/bioage_lm.png", plot = bioage_lm.p, width = 9, height = 4, units = 'in')
+
+bioage_tl.p <- ggplot(dnam.p %>% filter(clock %in% c('TL')), aes(x = age, y = DNAm)) + 
+  facet_wrap(facets = vars(clock)) + 
+  geom_point(size = 0.75) + 
+ # geom_abline(slope = 1, intercept = 0, color = 'blue', linetype = 2, size = 1) + 
+  geom_smooth(method = 'lm', se = F, color = 'red', linetype = 2, linewidth = 1) + 
+  scale_color_brewer(palette = "Set1") +
+  theme_bw() + 
+  labs(
+    x = "Chronological Age (Years)",
+    y = "Telomere Length",
+    color = "Model Type",
+  ) + 
+  theme(
+    strip.text = element_text(size = 12, face = "bold"), 
+    strip.background = element_blank(),
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+bioage_tl.p 
+
+bioage_mtcn.p <- ggplot(dnam.p %>% filter(clock %in% c('mtDNAcn')), aes(x = age, y = DNAm)) + 
+  facet_wrap(facets = vars(clock)) + 
+  geom_point(size = 0.75) + 
+ # geom_abline(slope = 1, intercept = 0, color = 'blue', linetype = 2, size = 1) + 
+  geom_smooth(method = 'lm', se = F, color = 'red', linetype = 2, linewidth = 1) + 
+  scale_color_brewer(palette = "Set1") +
+  theme_bw() + 
+  labs(
+    x = "Chronological Age (Years)",
+    y = "mtDNAcn",
+    color = "Model Type",
+  ) + 
+  theme(
+    strip.text = element_text(size = 12, face = "bold"), 
+    strip.background = element_blank(),
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+bioage_mtcn.p 
+
+
+### Combined plot
+png(filename = glue("results/plots/bioag_lm_{DATE}.png"), width = 9, height = 4, units = 'in', res = 300)
+pageCreate(width = 9, height = 4, default.units = "inches")
+
+plotGG(
+    plot = bioage_lm.p,
+    x = 0, y = 0,
+    width = 6.75, height = 4, just = c("left", "top")
+)
+
+plotGG(
+    plot = bioage_tl.p + theme(axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank()),
+    x = 6.75, y = 0,
+    width = 2.25, height = 1.8, just = c("left", "top")
+)
+
+plotGG(
+    plot = bioage_mtcn.p ,
+    x = 6.75, y = 1.7,
+    width = 2.25, height = 2.1, just = c("left", "top")
+)
+
+pageGuideHide()
+dev.off()
+
+
+```
+
+### Spaghetti plots
+```{r}
+## Longdurtional 
+
+adni_long <- adni %>%
+  select(RID, PHC_Visit, PHC_Age_Cognition, dx_bl, CausAge, PhenoAge, Horvathv2, Hannum, Lin, 
+         DNAmGrimAgev2) %>%
+  rename(Age = PHC_Age_Cognition, Visit = PHC_Visit) %>%
+  pivot_longer(cols = c(CausAge:DNAmGrimAgev2), 
+               names_to = "BioAge", 
+               values_to = "Value") %>%
+  arrange(RID, BioAge, Age) %>%
+  drop_na(Value)  %>%
+  group_by(RID, BioAge) %>%
+  mutate(visit = 1:n()) %>%
+  ungroup() 
+
+sampled_rids <- adni %>%
+  distinct(RID) %>%  # Get unique RID values
+  sample_n(50) %>%  # Randomly select a subset
+  pull(RID)
+
+bioage_long.p <- ggplot(
+    #adni_long
+    filter(adni_long, RID %in% sampled_rids), 
+    aes(x = visit, y = Value, group = RID, color = as.factor(dx_bl))
+    ) +
+  geom_line(alpha = 0.6, linewidth = 0.75) +  # Add lines for individual trajectories
+  # geom_point(size = 1) +    # Add points for observations
+  facet_wrap(~BioAge) +  # Separate plots for each measure
+    scale_x_continuous(breaks = seq(1, 3, by = 1)) + 
+  labs(
+    title = "Longitudinal Trajectories of Bioage Measures",
+    x = "Visit",
+    y = "Bioage Value",
+    color = "Participant ID"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
+
+bioage_long.p <- ggplot(
+    #adni_long
+    filter(adni_long, RID %in% sampled_rids), 
+    aes(x = Age, y = Value, group = RID, color = as.factor(dx_bl))
+    ) +
+  geom_line(alpha = 0.6, linewidth = 0.75) +  # Add lines for individual trajectories
+  # geom_point(size = 1) +    # Add points for observations
+  facet_wrap(~BioAge) +  # Separate plots for each measure
+  labs(
+    title = "Longitudinal Trajectories of Bioage Measures",
+    x = "Chronological Age",
+    y = "Bioage Value",
+    color = "Participant ID"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
+
+bioage_long.p
+
+ggsave("results/plots/bioage_long.png", plot = bioage_long.p, width = 9, height = 4, units = 'in')
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
