@@ -1,0 +1,1269 @@
+---
+title: "Untitled"
+format: html
+editor: source
+editor_options: 
+  chunk_output_type: console
+---
+
+## Import
+
+```{r}
+library(tidyverse)
+library(lavaan)
+library(semoutput)
+library(missForest)
+library(broom)
+library(mediation)
+library(plotgardener)
+
+setwd("~/gitcode/DNAm")
+
+```
+
+## Epigenetic Clos
+
+-   [Biolearn](https://bio-learn.github.io/clocks.html)
+
+### First Generation
+
+Primarily estimate biological age based on DNA methylation patterns, aiming to predict chronological age
+
+-   [Horvath 1 2013](https://genomebiology.biomedcentral.com/articles/10.1186/gb-2013-14-10-r115): pan-tissue Horvath clock (353-CpG clock) using 8,000 samples encompassing 51 different tissueand cell types
+-   [Horvath 2 2018](https://www.aging-us.com/article/101508/text): we developed a novel and highly robust DNAm age estimator (based on 391 CpGs) for human fibroblasts, keratinocytes, buccal cells, endothelial cells, lymphoblastoid cells, skin, blood, and saliva samples
+-   [Hannum 2013](https://www.sciencedirect.com/science/article/pii/S1097276512008933): 71- CpG clock using 656 whole-blood samples
+-   [PedBE](https://www.pnas.org/doi/10.1073/pnas.1820843116): 94 CpG clock using 1,721 pediatric (0-20y) buccal epithelial cell samples
+-   [Lin 2016](https://www.aging-us.com/article/100908/text): 99 CpG clock predicting age using Lothian Birth Cohort
+
+### Second Generation
+
+Second-generation clocks are designed to predict health outcomes, morbidity, and mortality more accurately, often incorporating additional clinical or phenotypic data alongside DNA methylation patterns.
+
+-   [Zhang 2017](https://www.nature.com/articles/ncomms14617): 10 CpG clock for mortality risk
+-   [PhenoAge 2018](https://pmc.ncbi.nlm.nih.gov/articles/PMC5940111/): uses standard methods but predicts a composite biological age score 31 based on a linear combination of chronological age and nine clinical parameters associated with mortality risk.
+-   [GrimAge1 2019](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6366976/): Seven DNAm-based estimators of plasma proteins including those of plasminogen activator inhibitor 1 (PAI-1) and growth differentiation factor 15. The resulting predictor of lifespan, DNAm GrimAge (in units of years), is a composite biomarker based on the seven DNAm surrogates and a DNAm-based estimator of smoking pack-years. Adjusting DNAm **GrimAge** for chronological age generated novel measure of epigenetic age acceleration, **AgeAccelGrim**.
+-   [GrimAge2 2022](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9792204/): Here we describe version 2 of GrimAge (trained on individuals aged between 40 and 92) which leverages two new DNAm based estimators of (log transformed) plasma proteins: high sensitivity C-reactive protein (logCRP) and hemoglobin A1C (logA1C). 13,399 blood samples across nine study cohorts.
+
+### Third Generation
+
+-   [DunedinPoAm38 2022](https://elifesciences.org/articles/54870): Dunedin Study members for whom age-38 DNA methylation data were available (N = 810). We applied elastic-net regression (Zou and Hastie, 2005) using Pace of Aging between ages 26 to 38 years as the criterion.
+-   [DunedinPACE 2022](https://elifesciences.org/articles/73420): Improved over PoAM38, longer follow-up, more time points.
+-   [CausAge 2024](https://www.nature.com/articles/s43587-023-00557-0): epigenome-wide Mendelian randomization, we identified CpG sites potentially causal for aging-related traits. We established a new framework to introduce causal information into epigenetic clocks, resulting in **DamAge** and **AdaptAge**---clocks that track detrimental and adaptive methylation changes, respectively. DamAge correlates with adverse outcomes, including mortality, while AdaptAge is associated with beneficial adaptations.
+
+## ADNI
+
+### Phenotypes
+
+```{r}
+## Clinical
+merge.raw <- read_csv("resources/ADNI/ADNIMERGE_25Sep2023.csv")
+
+merge <- dplyr::select(merge.raw, RID, PTID, COLPROT, ORIGPROT, VISCODE, EXAMDATE, EXAMDATE_bl, 
+                AGE, PTGENDER, PTEDUCAT, APOE4, PTRACCAT, PTETHCAT,
+                DX_bl, DX, CDRSB, ADAS13,
+                FDG, PIB, AV45, ABETA, TAU, PTAU, ADAS13, Hippocampus, WholeBrain) %>%
+  mutate(
+    race = case_when(
+      # ptraccat != "Asian" & ptethcat != "Hisp/Latino" & ptraccat != "Black" 
+      #  & ptraccat != "White" ~ "Other",
+      PTRACCAT == "White" & PTETHCAT != "Hisp/Latino" ~ "NHW",
+      PTRACCAT == "White" & PTETHCAT == "Hisp/Latino" ~ "Hispanic",
+      PTRACCAT == "More than one" & PTETHCAT == "Hisp/Latino" ~ "Hispanic",
+      PTRACCAT == "Black" ~ "Black",
+      PTRACCAT == "Asian" ~ "Asian",
+      PTRACCAT == "Unknown" ~ "Other",
+      PTRACCAT == "Am Indian/Alaskan" ~ "AIAN",
+      PTRACCAT == "Hawaiian/Other PI" ~ "NHPI",
+      PTRACCAT == "More than one" ~ "SOR",
+      TRUE ~ NA_character_
+    )) %>% 
+  arrange(RID, EXAMDATE) %>%
+  group_by(RID) %>%
+  mutate(
+    years_since_baseline = as.numeric(difftime(EXAMDATE, EXAMDATE_bl, units = "days")) / 365.25,
+    age = AGE + years_since_baseline,
+    cohort = "ADNI",
+    months = case_when(
+      VISCODE == "bl" ~ '0', 
+      str_detect(VISCODE, "m*") ~ str_replace(VISCODE, "m", "")
+    ), 
+    months = as.numeric(months), 
+  ) %>%
+  ungroup()
+
+merge_bl <- merge %>%
+  filter(VISCODE == 'bl')
+  
+dx_lv <- merge %>%
+  dplyr::select(RID, VISCODE, EXAMDATE, EXAMDATE_bl, years_since_baseline, age, DX) %>%
+  # filter(RID %in% rids$RID) %>% 
+  group_by(RID) %>% 
+  fill(DX, .direction = "down") %>%
+  slice_max(EXAMDATE) %>%
+  ungroup() 
+
+dx_lv %>% 
+  summarise(
+     n = n(),
+   age = mean(age), 
+    years = mean(years_since_baseline)
+  )
+
+csf <- merge %>%
+  dplyr::select(RID, VISCODE, EXAMDATE, years_since_baseline, age, ABETA, TAU, PTAU) %>%
+  # filter(RID %in% rids$RID) %>% 
+  filter(!is.na(ABETA), !is.na(TAU), !is.na(PTAU)) %>%
+  group_by(RID) %>% 
+  slice_max(EXAMDATE) %>%
+  ungroup()
+
+csf %>% 
+  summarise(
+    n = n(),
+    age = mean(age), 
+    years = mean(years_since_baseline)
+  )
+
+fdg <- merge %>%
+  dplyr::select(RID, VISCODE, EXAMDATE, years_since_baseline, age, FDG) %>%
+  # filter(RID %in% rids$RID) %>% 
+  filter(!is.na(FDG)) %>%
+  group_by(RID) %>% 
+  slice_max(EXAMDATE) %>%
+  ungroup()
+
+fdg %>% 
+  summarise(
+    n = n(),
+    age = mean(age), 
+    years = mean(years_since_baseline)
+  )
+
+av45 <- merge %>%
+  dplyr::select(RID, VISCODE, EXAMDATE, years_since_baseline, age, AV45) %>%
+  # filter(RID %in% rids$RID) %>% 
+  filter(!is.na(AV45)) %>%
+  group_by(RID) %>% 
+  slice_max(EXAMDATE) %>%
+  ungroup()
+
+av45 %>% 
+  summarise(
+     n = n(),
+   age = mean(age), 
+    years = mean(years_since_baseline)
+  )
+
+brain <- merge %>%
+  dplyr::select(RID, EXAMDATE, years_since_baseline, age, WholeBrain, Hippocampus) %>%
+  # filter(RID %in% rids$RID) %>% 
+  filter(!is.na(WholeBrain), !is.na(Hippocampus)) %>%
+  group_by(RID) %>% 
+  slice_max(EXAMDATE) %>%
+  ungroup()
+
+brain %>% 
+  # filter(years_since_baseline > 0) %>%
+  summarise(
+    n = n(),
+    age = mean(age), 
+    years = mean(years_since_baseline),
+  )
+
+```
+
+```{r}
+count(merge, months) %>%
+  print(n = Inf)
+
+merge %>%
+  group_by(RID) %>%
+  summarise(visits = n()) %>%
+  summarise(
+    mean = mean(visits), 
+    sd = sd(visits)
+  )
+
+adni.t1 <- tbl_summary(merge_bl, 
+            include = c(AGE, PTGENDER, PTEDUCAT, APOE4, race, DX_bl, DX),
+            statistic = list(all_continuous() ~ "{mean} ({sd})", all_categorical() ~ "{n} ({p}%)")
+) 
+
+
+
+  
+```
+
+A total of 649 ADNI participants hadmethylation data. Participants varied on the number of repeatDNA methylation measurements they had: 83 had only abaseline measurement; 121 had 2 measurements (baseline plus 1repeat), mean 14.5 months between measurements (SD = 7.06);407 had 3 measurements, mean 12.1 months between mea-surements (SD = 1.5); 29 had 4, mean 10.4 months betweenmeasurements (SD = 3.54); and 9 had 5, mean 12.5 monthsbetween measurements (SD = 2.25). [Sugden et al 2022](https://www.neurology.org/doi/10.1212/WNL.0000000000200898)
+
+### Methylation
+
+```{r}
+## Mythylation
+map.raw <- readxl::read_xlsx("resources/ADNI/ADNI_DNA_Methylation_SampleAnnotation_20170530.xlsx") %>%
+  mutate(Edate = as.Date(Edate))
+clocks.raw <- read_csv("intermediate/adni_epiclocks_240826.csv") %>%
+  rename(barcodes = '...1' ) 
+
+dnam.raw <- map.raw %>%
+  dplyr::select(barcodes, RID, Phase,  Edate, DateDrawn, PlateNumber, Array) %>%
+  rename(Phase_methy = Phase,  Edate_methy = Edate, DateDrawn_methy = DateDrawn) %>%
+  arrange(RID, Edate_methy, PlateNumber) %>%
+  left_join(clocks.raw, by = 'barcodes') 
+
+dnam <- dnam.raw %>% 
+  group_by(RID, Edate_methy) %>%
+  distinct(RID, .keep_all = T) %>%
+  group_by(RID) %>%
+  slice(1:3)%>%
+  ungroup() %>%
+  dplyr::select(-Age)
+
+```
+
+### Telomeres
+
+```{r}
+## Telomere Ration
+ts.raw <- read_csv("resources/ADNI/TS_RATIO_ADJ_23Aug2024.csv")
+
+ts <- ts.raw %>% 
+  arrange(RID, EXAM_DATE) %>%
+  group_by(RID, EXAM_DATE) %>%
+  distinct(RID, .keep_all = T) %>%
+  group_by(RID) %>%
+  slice(1:3) %>%
+  ungroup() 
+  
+```
+
+At what time point was WGS done? I think ADNI GO/2 when new blood was collected https://www.sciencedirect.com/science/article/pii/S1552526015001776
+
+### Genetics
+
+```{r}
+## Genetics 
+gen.raw <- read_csv("resources/ADNI/APOE_GENETIC_27Aug2024.csv") %>%
+  arrange(RID, VISDATE) 
+
+apoe_wgs.path <- "resources/ADNI/ADNI.808_indiv.minGQ_21.pass.ADNI_ID.chr19.vcf/apoe_region.vcf"
+apoe_wgs.raw <- vcfR::read.vcfR(apoe_wgs.path)
+
+apoe_wgs <- vcfR::vcfR2tidy(apoe_wgs.raw, format_fields = c("GT")) %>%
+  magrittr::extract2('gt') %>%
+  filter(POS %in% c("45411941", "45412079")) %>%
+  dplyr::select(-ChromKey, -gt_GT) %>%
+  mutate(
+    POS = ifelse(POS == 45412079, 'rs7412', 'rs429358'), 
+    RID = sub("^0+", "", str_extract(Indiv, "\\d{4}$")), 
+    RID = as.numeric(RID)
+  ) %>%
+  pivot_wider(names_from = POS, values_from = gt_GT_alleles) %>%
+  arrange(RID)
+  
+
+semi_join(gen.raw, apoe_wgs, by = c('PTID' = 'Indiv')) 
+semi_join(gen.raw, apoe_wgs, by = c('PTID' = 'Indiv')) %>%
+  group_by(PTID) %>% slice_max(VISDATE) %>%
+  ungroup() %>%
+  count(PHASE, VISCODE2)
+```
+
+### Merge
+
+```{r}
+
+rids <- bind_rows(
+  dplyr::select(ts, RID), 
+  dplyr::select(dnam, RID)
+) %>%
+  distinct(RID)
+
+
+adni.raw <- merge %>%
+  left_join(dplyr::select(apoe_wgs, -RID), by = c("PTID" = "Indiv")) %>%
+  left_join(dnam %>% dplyr::select(-DateDrawn_methy, -Phase_methy),
+            by = c('RID', 'EXAMDATE' = 'Edate_methy')) %>%
+  left_join(ts %>% dplyr::select(-VISCODE, -VISCODE2, -update_stamp, -DATE_DRAWN, -DATE_RECEIVED, -PHASE), 
+            by = c('RID', 'EXAMDATE' = 'EXAM_DATE')) %>%
+  semi_join(rids) 
+  
+adni <- adni.raw %>% 
+  filter(!is.na(PlateNumber) | !is.na(PLATE)) %>%
+  dplyr::select(-DX) %>%
+  full_join(dx_lv %>% dplyr::select(RID, VISCODE, EXAMDATE, EXAMDATE_bl, years_since_baseline, age, DX)) %>%
+  arrange(RID, EXAMDATE) %>%
+  relocate(DX, .after = DX_bl) %>%
+  relocate(age, .after = AGE) %>%
+  mutate(
+    cohort = "ADNI",
+    months = case_when(
+      VISCODE == "bl" ~ '0', 
+      str_detect(VISCODE, "m*") ~ str_replace(VISCODE, "m", "")
+    ), 
+    months = as.numeric(months), 
+  ) %>%
+  relocate(months, .after = VISCODE) %>%
+  group_by(RID) %>%
+  mutate(
+    visit = 1:n(),
+    visits = n()
+  )  %>%
+  relocate(visit, visits, .after = months) %>%
+  ungroup()
+
+
+adni %>% 
+  # filter(visits == 3) %>%
+  group_by(visit) %>%
+  summarise(
+    age = mean(age),
+    n = n(),
+    n_wgs = sum(!is.na(rs7412)),
+    n_mth = sum(!is.na(CausAge)),
+    n_tel = sum(!is.na(TS_RATIO)), 
+    median_age = median(age),
+    # iqr = IQR(age)
+  ) 
+
+adni_dnam_bl <- adni %>%
+  filter(visit == 1) %>%
+  filter(!is.na(CausAge))
+
+```
+
+```{r}
+write_csv(adni, "intermediate/adni_gen.csv")
+
+```
+
+```{r}
+adni %>% count(is.na(CausAge))
+adni %>% count(is.na(TS_RATIO))
+
+test <- full_join(
+  dplyr::select(dnam, RID, Edate_methy, CausAge), 
+  dplyr::select(ts, RID, EXAM_DATE, TS_RATIO), 
+  by = c('RID', 'Edate_methy' = 'EXAM_DATE'))
+
+dnam.raw <- map.raw %>%
+  dplyr::select(barcodes, RID, Phase,  Edate, DateDrawn, PlateNumber, Array) %>%
+  rename(Phase_methy = Phase,  Edate_methy = Edate, DateDrawn_methy = DateDrawn) %>%
+  arrange(RID, Edate_methy, PlateNumber) %>%
+  left_join(, 
+            by = c('RID', 'Edate_methy' = 'EXAMDATE'))  %>%
+  left_join(clocks.raw, by = 'barcodes') %>%
+  left_join(apoe_wgs, by = 'RID')
+
+
+  mutate(
+    origprot = first(Phase_methy), 
+    months = case_when(
+      VISCODE == "bl" ~ '0', 
+      str_detect(VISCODE, "m*") ~ str_replace(VISCODE, "m", "")
+    ), 
+    months = as.numeric(months), 
+    initial_methyl = case_when(
+      first(VISCODE) == "bl" ~ "baseline", 
+      str_detect(VISCODE, "m*") ~ "followup"
+    )
+  ) %>%
+  ungroup() %>%
+  relocate(origprot, .after = Phase_methy) %>%
+  relocate(months, initial_methyl, .after = VISCODE)
+
+dnam %>%
+  left_join(meth_visits, by = "RID") %>%
+  filter(visits == 3) %>%
+  group_by(RID) %>% 
+  slice_min(Edate_methy) %>%
+  group_by(origprot) %>%
+  count(initial_methyl) %>%
+  print(n = Inf)
+
+dnam %>%
+  left_join(meth_visits, by = "RID") %>%
+  # filter(visits == 3) %>%
+  group_by(RID) %>% 
+  slice_min(Edate_methy) %>%
+  ungroup() %>%
+  count(is.na(rs7412))
+
+filter(dnam, Edate_methy != DateDrawn_methy)
+count(dnam, Edate_methy == DateDrawn_methy)  
+
+meth_visits <- dnam %>%
+  group_by(RID) %>%
+  summarise(visits = n()) 
+
+count(dnam, n())
+
+
+
+
+```
+
+```{r}
+ba <- dnam %>% 
+  dplyr::select(barcodes, RID, Edate_methy, AGE, DX, CDRSB, Horvathv2, Hannum, Lin, PhenoAge, CausAge, DNAmGrimAgev2) %>%
+  group_by(RID) %>%
+  slice_min(Edate_methy) %>%
+  ungroup() %>%
+  pivot_longer(
+    cols = Horvathv2:DNAmGrimAgev2, 
+    names_to = 'clock', 
+    values_to = 'ba'
+  )
+
+
+ggplot(ba, aes(x = AGE, y = ba, colour = clock)) + 
+  facet_wrap(facets = vars(clock)) + 
+  geom_point(color = 'black') + 
+  geom_smooth(method='lm', formula= y~x) + 
+  theme_bw()
+  
+ggplot(ba, aes(x = AGE, y = ba, colour = DX)) + 
+  facet_wrap(facets = vars(clock)) + 
+  geom_point() + 
+  geom_smooth(method='lm', formula= y~x, color = "black") + 
+  theme_bw()
+  
+
+ggplot(ba, aes(x = CDRSB, y = ba, colour = clock)) + 
+  facet_wrap(facets = vars(clock)) + 
+  geom_point(color = 'black') + 
+  geom_smooth(method='lm', formula= y~x) + 
+  theme_bw()
+
+ggplot(dx_lv, aes(x=age, y="ADNI") ) +
+  stat_density_2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(
+    legend.position='none'
+  )
+
+ggplot(adni, aes(x = age, y = cohort, fill = factor(visit))) +
+  geom_boxplot() +
+  labs(x = "Age", y = "Cohort", fill = "Visit") +
+  theme_minimal()
+
+
+
+
+```
+
+### Regressions
+
+```{r}
+lm(ADAS13 ~ CausAge + AGE + PTGENDER + PTEDUCAT + APOE4, data = adni_dnam_bl) %>%
+  summary()
+```
+
+## ROSMAP
+
+### LIBRA Risk score
+
+```{r}
+# Dementia risk score 
+cog.raw <- readxl::read_xlsx("~/Library/CloudStorage/Box-Box/AndrewsLab/data/RUSH/1341/dataset_1341_basic_01-10-2024.xlsx") %>%
+  mutate(projid = as.character(projid))
+cog_long.raw <- readxl::read_xlsx("~/Library/CloudStorage/Box-Box/AndrewsLab/data/RUSH/1341/dataset_1341_long_01-10-2024.xlsx") %>%
+  mutate(projid = as.character(projid)) 
+
+adri.raw <- read_csv("~/Dropbox/Research/PhD/Analysis/10 CAPA/(2) Derived Data/RUSH-ADRI.csv") %>%
+  dplyr::select(-'...1') %>%
+  mutate(projid = as.character(projid))
+
+rf <- cog_long.raw %>%
+  filter(!is.na(cogn_global)) %>%
+  group_by(projid) %>%
+  slice_min(fu_year) %>%
+  ungroup() %>%
+  dplyr::select(projid, r_stroke, hypertension_cum) %>%
+  left_join(dplyr::select(adri.raw, projid, age_bl, sex, educ, apoe_genotype, pa_risk, bmi, chlstrl, socialnetwork_risk, cogactivity_risk, alcohol_risk, smoke_risk, diabetes_risk, depression_risk, adri), 
+            by = 'projid') %>%
+  filter(!is.na(educ)) 
+
+  
+### impute missing data 
+require(doParallel)
+registerDoParallel(cores=3) 
+getDoParWorkers()
+require(doRNG)
+registerDoRNG(seed = 333)
+
+rosmap_ximp <- rf %>%
+  dplyr::select(-projid) %>%
+  mutate(
+    r_stroke = as_factor(r_stroke), 
+    sex = as_factor(sex), 
+    smoke_risk = as_factor(smoke_risk), 
+    apoe_genotype = as_factor(apoe_genotype), 
+    pa_risk = as_factor(pa_risk), 
+    socialnetwork_risk = as_factor(socialnetwork_risk), 
+    cogactivity_risk = as_factor(cogactivity_risk), 
+    alcohol_risk = as_factor(alcohol_risk), 
+    diabetes_risk = as_factor(diabetes_risk), 
+    depression_risk = as_factor(depression_risk), 
+    hypertension_cum = as_factor(hypertension_cum), 
+  ) %>%
+  as.data.frame() %>%
+  missForest(xmis = ., variablewise = TRUE, verbose = TRUE, xtrue = filter(., complete.cases(.)), parallelize = 'forests')
+
+rosmap_imp <- rosmap_ximp %>%
+  magrittr::extract2(1) %>%
+  dplyr::select(-age_bl, -sex, -apoe_genotype) %>%
+  magrittr::set_colnames(paste0("i_", colnames(.))) %>%
+  as_tibble() %>%
+  mutate(
+    i_pteducat = round(i_educ), 
+    i_bmi = round(i_bmi, 1)
+  )
+
+libra <- rf %>%
+  bind_cols(rosmap_imp) %>%
+  mutate(
+    libra_agesex = case_when(
+      age_bl <= 64 & sex == 1 ~ 0,
+      age_bl > 64 & age_bl <= 69 & sex == 1 ~ 6,
+      age_bl > 69 & age_bl <= 74 & sex == 1 ~ 8,
+      age_bl > 74 & age_bl <= 79 & sex == 1 ~ 13,
+      age_bl > 79 & age_bl <= 84 & sex == 1 ~ 17,
+      age_bl > 84 & age_bl <= 89 & sex == 1 ~ 20,
+      age_bl > 89 & sex == 1 ~ 22,
+      age_bl <= 64 & sex == 0 ~ 0,
+      age_bl > 64 & age_bl <= 69 & sex == 0 ~ 4,
+      age_bl > 69 & age_bl <= 74 & sex == 0 ~ 7,
+      age_bl > 74 & age_bl <= 79 & sex == 0 ~ 11,
+      age_bl > 79 & age_bl <= 84 & sex == 0 ~ 15,
+      age_bl > 84 & age_bl <= 89 & sex == 0 ~ 19,
+      age_bl > 89 & sex == 0 ~ 23,
+   ),
+    libra_pa = case_when(
+      i_pa_risk %in% c(-3, -2) ~ 0, 
+      i_pa_risk == 0 ~ 1.1,
+      TRUE ~ NA_real_
+    ), 
+    libra_cog = case_when(
+      i_cogactivity_risk %in% c(-7, -6) ~ -3.2, 
+      i_cogactivity_risk == 0 ~ 0,
+      TRUE ~ NA_real_
+    ), 
+    libra_alc = case_when(
+      i_alcohol_risk %in% c(-3) ~ -1, 
+      i_alcohol_risk == 0 ~ 0,
+      TRUE ~ NA_real_
+    ), 
+    libra_smk = case_when(
+      i_smoke_risk %in% c(1,4) ~ 1.5, 
+      i_smoke_risk == 0 ~ 0,
+      TRUE ~ NA_real_
+    ), 
+    libra_stroke = case_when(
+      i_r_stroke %in% c(1,2,3) ~ 1, 
+      i_r_stroke == 4 ~ 0,
+      TRUE ~ NA_real_
+    ), 
+    libra_diab = case_when(
+      i_diabetes_risk == 3 ~ 1.3, 
+      i_diabetes_risk == 0 ~ 0,
+      TRUE ~ NA_real_
+    ), 
+    libra_chl = case_when(
+      i_chlstrl >= 239 ~ 1.4, 
+      i_chlstrl < 239 ~ 0,
+      TRUE ~ NA_real_
+    ), 
+    libra_bmi = case_when(
+      i_bmi >= 30 ~ 1.6, 
+      i_bmi < 30 ~ 0,
+      TRUE ~ NA_real_
+    ), 
+    libra_htn = case_when(
+      i_hypertension_cum == 1 ~ 1.6, 
+      i_hypertension_cum == 0 ~ 0,
+      TRUE ~ NA_real_
+    ), 
+    libra_dep = case_when(
+      i_depression_risk == 2 ~ 2.1, 
+      i_depression_risk == 0 ~ 0,
+      TRUE ~ NA_real_
+    ),  
+  ) %>%
+  rowwise() %>%
+  mutate(
+    libra = sum(libra_pa, libra_cog, libra_alc, libra_smk, libra_stroke, libra_diab, 
+                libra_chl, libra_bmi, libra_htn, libra_dep, na.rm = F), 
+    libra2 = sum(libra_agesex, libra_pa, libra_cog, libra_alc, libra_smk, libra_stroke, libra_diab, 
+                libra_chl, libra_bmi, libra_htn, libra_dep, na.rm = F), 
+  ) %>%
+  ungroup()
+
+rosmap_mcaide <- rf %>%
+  bind_cols(rosmap_imp) %>%
+  mutate(
+    mcaide_age = case_when(
+      age_bl <= 64.5 ~ 0, 
+      age_bl > 64.5 & age_bl < 73 ~ 1, 
+      age_bl >= 73 ~ 2, 
+      TRUE ~ NA_real_
+    ), 
+    mcaide_educ = case_when(
+      i_educ <= 11 ~ 2, 
+      i_educ >= 12 & i_educ <= 16 ~ 1, 
+      i_educ > 16 ~ 0, 
+      TRUE ~ NA_real_
+    ), 
+    mcaide_sex = case_when(
+      sex == 1 ~ 1, 
+      sex == 0 ~ 0, 
+      TRUE ~ NA_real_
+    ), 
+    mcaide_bmi = case_when(
+      i_bmi < 30 ~ 0, 
+      i_bmi >= 30 ~ 2, 
+      TRUE ~ NA_real_
+    ),
+    mcaide_sbp = case_when(
+      i_hypertension_cum == 0 ~ 0, 
+      i_hypertension_cum == 1 ~ 2, 
+      TRUE ~ NA_real_
+    ),
+    mcaide_chol = case_when(
+      i_chlstrl >= 239 ~ 2, 
+      i_chlstrl < 239 ~ 0,
+      TRUE ~ NA_real_
+    ), 
+    mcaide_pa = case_when(
+      i_pa_risk %in% c(-3, -2) ~ 0, 
+      i_pa_risk == 0 ~ 3,
+      TRUE ~ NA_real_
+    ), 
+  ) %>%
+  rowwise() %>%
+  mutate(
+    mcaide = sum(mcaide_age, mcaide_educ, mcaide_sex, mcaide_bmi, mcaide_sbp, mcaide_chol, mcaide_pa, na.rm = F), 
+  ) %>%
+  ungroup() 
+  
+ggplot(libra, aes(x = adri, y = libra)) + geom_point()
+```
+
+### Epiclocks
+
+```{r}
+rosmap.spec <- read_csv("resources/AMP-AD/rosmap/ROSMAP_biospecimen_metadata.csv")
+rosmap.dnam <- read_csv("resources/AMP-AD/rosmap/ROSMAP_assay_methylationArray_metadata.csv") %>%
+  left_join(rosmap.spec %>% dplyr::select(specimenID, individualID, organ, tissue), by = "specimenID") %>%
+  relocate(individualID, .before = specimenID) %>%
+  mutate(assay = "DNAm")
+
+cortical.raw <- read_csv('~/Dropbox/Research/UCSF/DNAm/intermediate/CorticalPred.csv') %>%
+  dplyr::select(-'...1')
+biolearn.raw <- read_csv('~/Dropbox/Research/UCSF/DNAm/intermediate/rosmap_epiclocks_241012.csv') %>%
+  rename(specimenID = '...1' ) 
+
+epiclocks.rosmap <- left_join(biolearn.raw, dplyr::select(cortical.raw, ID, brainpred), by = c("specimenID" = "ID")) %>%
+  filter(!is.na(Age))
+
+epiclocks.rosmap %>%
+  summarize(
+  Hannum = mean(Hannum),
+  Horvath1 = mean(Horvath1),
+  PhenoAge = mean(PhenoAge),
+  CausAge = mean(CausAge),
+  brainpred = mean(brainpred),
+  )
+
+
+round(cor(epiclocks.rosmap[,'Age'],epiclocks.rosmap[,'brainpred']),2)
+round(cor(epiclocks.rosmap[,'Age'],epiclocks.rosmap[,'CausAge']),2)
+round(cor(epiclocks.rosmap[,'Age'],epiclocks.rosmap[,'Hannum']),2)
+round(cor(epiclocks.rosmap[,'Age'],epiclocks.rosmap[,'Horvath1']),2)
+
+```
+
+### mtDNAcn
+
+```{r}
+mtdnacn.raw <- read_tsv("~/Dropbox/Research/PostDoc-MSSM/mtDNAcn/data/mosdepth_mtDNAcn_All.txt")
+wgsqc.raw <- read_csv("~/Dropbox/Research/PostDoc-MSSM/mtDNAcn/data/AMPAD_extra/rosmap/WGS_sample_QC_info.csv") 
+
+rosmap.wgsqc <- read_csv("resources/AMP-AD/rosmap/ROSMAP_assay_wholeGenomeSeq_metadata.csv") %>%
+  left_join(rosmap.spec %>% dplyr::select(specimenID, individualID, organ, tissue), by = "specimenID") %>%
+  relocate(individualID, .before = specimenID)
+
+rosmap.mtdnacn <- left_join(wgsqc.raw, mtdnacn.raw, by = c("WGS_id" = "SampleID")) %>%
+  mutate(projid = as.character(projid)) %>%
+  filter(str_detect(Source.Tissue.Type, 'Brain')) %>%
+  filter(!str_detect(Source.Tissue.Type, 'Cerebellum')) %>%
+  filter(!(projid == "44749170" & str_detect(Source.Tissue.Type, 'Cingulate'))) %>%
+  filter(QC == 'Pass') %>%
+  dplyr::select(projid, mt_coverage, autosomal_coverage, mtcn_avg)
+
+```
+
+### nsSNVs
+
+```{r}
+rosmap_nsnvs.raw <- read_tsv("~/gitcode/R01_EAA/resources/nsSNVs/gatk.mutect.mosaicforecast.rosmap.chrall.pheno_pc_germline_risk_variant_genotypes_somatic_variant_burden.analysis.tsv", col_types = c('c'))
+
+rosmap_nsnvs <- rosmap_nsnvs.raw %>%
+  dplyr::select(projid, TOTAL_SOMATIC_VARIANT_COUNT, TOTAL_SOMATIC_VARIANT_LENGTH, 
+                TOTAL_SOMATIC_VARIANT_COUNT_LOG10, TOTAL_SOMATIC_VARIANT_LENGTH_LOG10)  %>%
+  mutate(projid = as.character(projid))
+                      
+```
+
+### Wrangling
+
+```{r}
+
+rosmap.clin <- read_csv("resources/AMP-AD/rosmap/ROSMAP_clinical.csv") %>%
+  relocate(individualID)
+
+rosmap.pheno <- readxl::read_xlsx("resources/AMPAD_extra/rosmap/dataset_641_basic_04-29-2020.xlsx") %>%
+  left_join(rosmap.clin %>% dplyr::select(individualID, projid, educ, race, spanish), by = "projid") %>%
+  mutate(
+    dx = case_when(
+      cogdx == 1 ~ "NCI", 
+      cogdx %in% c(2,3) ~ "MCI", 
+      cogdx %in% c(4,5,6) ~ "dementia", 
+    ),
+    dx = fct_relevel(dx, "NCI", "MCI", "dementia"),
+    dx_bin = fct_recode(dx, "NCI" = "NCI",  "CI" = "MCI", "CI" = "dementia"),
+    dx_bin = fct_relevel(dx_bin, "NCI", "CI"),
+    apoe = case_when(
+      apoe_genotype	 == 33 ~ "e3/e3", 
+      apoe_genotype	 %in% c(22,23) ~ "e2+", 
+      apoe_genotype	 %in% c(24,34,44) ~ "e4+", 
+    ), 
+    apoe = fct_relevel(apoe, "e3/e3", "e2+", "e4+"),
+    apoe4 = case_when(
+      apoe_genotype %in% c(33, 23, 22) ~ 0, 
+      apoe_genotype %in% c(24, 34, 44) ~ 1, 
+      TRUE ~ NA_real_
+    ),
+  )
+
+```
+
+```{r}
+
+rosmap.gen <- rosmap.wgsqc %>%
+  dplyr::select(individualID, specimenID, assay, organ, tissue) %>%
+  left_join(rosmap.dnam %>% dplyr::select(individualID, specimenID, assay, organ, tissue), 
+            by = 'individualID', suffix = c(".wgs", '.dnam')) %>%
+  left_join(rosmap.clin %>% dplyr::select(individualID, projid), by = "individualID") %>%
+  left_join(rosmap.pheno, by = "projid") 
+
+cog_long <- cog_long.raw %>%
+  filter(!is.na(cogn_global)) %>%
+  group_by(projid) %>%
+  slice_max(fu_year) %>%
+  ungroup()
+
+rosmap.df <- rosmap.gen %>% 
+  filter(organ.wgs == "brain") %>% 
+  # filter(tissue.wgs %in% c("dorsolateral prefrontal cortex", "posterior cingulate cortex")) %>%
+  # filter(tissue.wgs %in% c("dorsolateral prefrontal cortex")) %>%
+  # select(individualID, specimenID.wgs, specimenID.dnam, projid) %>%
+  left_join(rosmap.mtdnacn, by = c("projid")) %>%
+  left_join(rosmap_nsnvs, by = c("projid")) %>%
+  left_join(epiclocks.rosmap, by = c("specimenID.dnam" = "specimenID")) %>%
+  left_join(libra %>% dplyr::select(projid, adri, i_adri, libra, libra2, bmi),  by = c("projid")) %>%
+  left_join(rosmap_mcaide %>% dplyr::select(projid, mcaide),  by = c("projid")) %>%
+  left_join(cog.raw %>% dplyr::select(projid, cogng_demog_slope, cognep_demog_slope, cognps_demog_slope, educ),  
+            by = c("projid")) %>%
+  left_join(cog_long %>% dplyr::select(projid, cogn_global, projid, cts_mmse30),  by = c("projid")) %>%
+  mutate(
+    amylsqrt = sqrt(amyloid),
+    nftsqrt = sqrt(nft),
+    tissue = case_when(
+      str_detect(tissue.wgs, "dorsolateral") ~ "DLPFC", 
+      str_detect(tissue.wgs, "cingulate") ~ "PCC", 
+      TRUE ~ 'Other'
+    ),
+    z_mtcn = scale(mtcn_avg)[,1], 
+    z_dnam = scale(brainpred)[,1], 
+    z_adri = scale(adri)[,1], 
+  ) %>%
+  filter(tissue != "Other")
+
+rosmap.df %>%
+  count(is.na(mtcn_avg), is.na(brainpred)) 
+
+rosmap.cc <- rosmap.df %>% 
+  dplyr::select(projid, study, tissue, dx, pmi, cogng_demog_slope, gpath, z_dnam, 
+                z_mtcn, age_death, libra, mcaide, msex, apoe4, apoe) %>%
+  filter(tissue != "Other") %>%
+  filter(!is.na(z_dnam), !is.na(z_mtcn)) %>%
+  filter(complete.cases(.))
+
+
+```
+
+```{r}
+write_csv(rosmap.df, "intermediate/rosmap_gen.csv")
+```
+
+### Regression Models
+
+#### Main Effects
+
+```{r, mediation}
+## Cognition 
+cog_dnam.res <- lm(cogng_demog_slope ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_dnam.res) 
+cog_mtcn.res <- lm(cogng_demog_slope ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_mtcn.res) 
+cog_libra.res <- lm(cogng_demog_slope ~ libra + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_libra.res) 
+cog_gpath.res <- lm(cogng_demog_slope ~ gpath + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_gpath.res) 
+
+## Global Pathology 
+gpath_dnam.res <- lm(gpath ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(gpath_dnam.res) 
+gpath_mtcn.res <- lm(gpath ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.df); summary(gpath_mtcn.res) 
+gpath_libra.res <- lm(gpath ~ libra + age_death + msex + apoe + tissue, data = rosmap.df); summary(gpath_libra.res) 
+
+## mtDNAcn
+mtcn_dnam.res <- lm(z_mtcn ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(mtcn_dnam.res) 
+mtcn_gpath.res <- lm(z_mtcn ~ gpath + age_death + msex + apoe + tissue, data = rosmap.df); summary(mtcn_gpath.res) 
+mtcn_libra.res <- lm(z_mtcn ~ libra + age_death + msex + apoe + tissue, data = rosmap.df); summary(mtcn_libra.res) 
+mtcn_libra2.res <- lm(z_mtcn ~ libra2 + age_death + apoe + tissue, data = rosmap.df); summary(mtcn_libra2.res) 
+
+## dnam
+dnma_mtcn.res <- lm(z_dnam ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.df) ; summary(dnma_mtcn.res) 
+dnma_gpath.res <- lm(z_dnam ~ gpath + age_death + msex + apoe + tissue, data = rosmap.df) ; summary(dnma_gpath.res) 
+dnam_libra.res <- lm(z_dnam ~ libra + age_death + msex + apoe + tissue, data = rosmap.df) ; summary(dnam_libra.res) 
+
+## Summary Table 
+regresion.res <- bind_rows(
+  tidy(cog_dnam.res) %>% mutate(outcome = 'cog'),
+  tidy(cog_mtcn.res) %>% mutate(outcome = 'cog'),
+  tidy(cog_libra.res) %>% mutate(outcome = 'cog'),
+  tidy(cog_gpath.res) %>% mutate(outcome = 'cog'),
+  
+  tidy(gpath_dnam.res) %>% mutate(outcome = 'gpath'),
+  tidy(gpath_mtcn.res) %>% mutate(outcome = 'gpath'),
+  tidy(gpath_libra.res) %>% mutate(outcome = 'gpath'),
+  
+  tidy(mtcn_dnam.res) %>% mutate(outcome = 'mtcn'),
+  tidy(mtcn_libra.res) %>% mutate(outcome = 'mtcn'),
+  
+  tidy(dnma_mtcn.res) %>% mutate(outcome = 'dnam'),
+  tidy(dnam_libra.res) %>% mutate(outcome = 'dnam'),
+
+) %>%
+  relocate(outcome) %>%
+  filter(term %in% c('z_dnam', 'z_mtcn', 'gpath', 'libra')) %>%
+  mutate(signif = gtools::stars.pval(p.value))
+
+regresion.res 
+
+```
+
+```{r}
+## Other models
+
+## Cognition 
+cog_nssnvs.res <- lm(cogng_demog_slope ~ TOTAL_SOMATIC_VARIANT_COUNT_LOG10 + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_nssnvs.res) 
+cog_all.res <- lm(cogng_demog_slope ~ TOTAL_SOMATIC_VARIANT_COUNT + z_dnam + z_mtcn + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_all.res) 
+lm(cognps_demog_slope ~ libra + age_death + msex + apoe + tissue, data = rosmap.df) %>% summary() 
+
+
+## Global Pathology 
+gpath_nssnvs.res <- lm(gpath ~ TOTAL_SOMATIC_VARIANT_COUNT_LOG10 + age_death + msex + apoe + tissue, data = rosmap.df); summary(gpath_nssnvs.res) 
+
+## mtDNAcn
+mtcn_nssnvs.res <- lm(z_mtcn ~ TOTAL_SOMATIC_VARIANT_COUNT_LOG10 + age_death + msex + apoe + tissue, data = rosmap.df); summary(mtcn_nssnvs.res) 
+
+## dnam
+dnma_nssnvs.res <- lm(z_dnam ~ TOTAL_SOMATIC_VARIANT_COUNT_LOG10 + age_death + msex + apoe + tissue, data = rosmap.df) ; summary(dnma_nssnvs.res) 
+
+## Dx 
+glm(dx ~ z_dnam + age_death + msex + apoe, data = rosmap.cc, family = "binomial") %>% summary()
+glm(dx ~ z_mtcn + age_death + msex + apoe, data = rosmap.cc, family = "binomial") %>% summary()
+glm(dx ~ libra + age_death + msex + apoe, data = rosmap.cc, family = "binomial") %>% summary()
+# glm(dx ~ adri + age_death + msex + apoe, data = rosmap.cc, family = "binomial") %>% summary()
+glm(dx ~ gpath + age_death + msex + apoe, data = rosmap.cc, family = "binomial") %>% summary()
+
+## Cognition
+lm(cogn_global ~ z_dnam + age_death + msex + apoe + educ, data = rosmap.cc) %>% summary()
+lm(cogn_global ~ z_mtcn + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(cogn_global ~ libra + age_death + msex  + educ + apoe, data = rosmap.cc) %>% summary()
+lm(cogn_global ~ gpath + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+
+## amyloid
+lm(amylsqrt ~ z_dnam + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(amylsqrt ~ z_mtcn + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(amylsqrt ~ libra + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+
+## NFT
+lm(nftsqrt ~ z_dnam + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(nftsqrt ~ z_mtcn + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(nftsqrt ~ libra + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+lm(nftsqrt ~ adri + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+
+lm(z_mtcn ~ adri + pmi + age_death + msex + study, data = rosmap.cc) %>% summary()
+lm(z_dnam ~ adri  + age_death + msex + apoe, data = rosmap.cc) %>% summary()
+
+
+```
+
+#### Interactions
+
+```{r}
+## interactions
+cog_dnam_mtcn_int.res <- lm(cogng_demog_slope ~ z_mtcn*z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_dnam_mtcn_int.res)
+cog_dnam_libra_int.res <- lm(cogng_demog_slope ~ libra*z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_dnam_libra_int.res)
+cog_mtcn_libra_int.res <- lm(cogng_demog_slope ~ libra*z_mtcn + age_death + msex + apoe + tissue, data = rosmap.df); summary(cog_mtcn_libra_int.res)
+
+gpath_dnam_mtcn_int.res <- lm(gpath ~ z_mtcn*z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(gpath_dnam_mtcn_int.res)
+gpath_dnam_libra_int.res <- lm(gpath ~ libra*z_dnam + age_death + msex + apoe + tissue, data = rosmap.df); summary(gpath_dnam_libra_int.res)
+gpath_mtcn_libra_int.res <- lm(gpath ~ libra*z_mtcn + age_death + msex + apoe + tissue, data = rosmap.df); summary(gpath_mtcn_libra_int.res)
+
+```
+
+#### Plots & Tables
+
+```{r}
+
+regression.out <- bind_rows(
+    tidy(cog_dnam_mtcn_int.res) %>% mutate(outcome = "cog") ,
+    tidy(gpath_dnam_mtcn_int.res) %>% mutate(outcome = "gpath")
+  ) %>%
+  relocate(outcome) %>%
+  filter(str_detect(term, ":")) %>%
+  mutate(signif = gtools::stars.pval(p.value)) %>%
+  bind_rows(regresion.res) %>%
+  mutate(
+    uci = estimate + 1.96 * std.error,   # Lower bound of confidence interval
+    lci = estimate - 1.96 * std.error,
+    term = fct_recode(term, 
+                      'mtDNAcn' = 'z_mtcn', 
+                      'DNAm' = 'z_dnam', 
+                      'LIBRA' = 'libra', 
+                      'mtDNAcn * DNAm' = 'z_mtcn:z_dnam', 
+                      'Glob AD Pathol.' = 'gpath', 
+                      ), 
+    term = fct_relevel(term, "Glob AD Pathol.", "LIBRA", 'mtDNAcn', 'DNAm', 'mtDNAcn * DNAm'),
+    outcome = fct_recode(outcome, 
+                      'mtDNAcn' = 'mtcn', 
+                      'DNAm' = 'dnam', 
+                      'Glob AD Pathol.' = 'gpath', 
+                      'Cog. Decline' = 'cog', 
+                      ), 
+    outcome = fct_relevel(outcome, 'Cog. Decline',"Glob AD Pathol.", 'mtDNAcn', 'DNAm'),
+    signif_lab = case_when(
+      p.value < 0.05 ~ "Sig.", 
+      p.value >= 0.05 & p.value < 0.1  ~ "Marg.", 
+      p.value >= 0.1  ~ "NS.",
+    ), 
+     signif_lab = fct_relevel(signif_lab, 'NS.',"Marg.", 'Sig.'),
+  )
+
+
+write_csv(regression.out, 'results/regression_results.csv')
+
+
+coeff.p <- ggplot(regression.out, aes(x = estimate, y = term, colour = signif_lab)) + 
+  facet_grid(rows = vars(outcome), scales = 'free', space = 'free', switch = 'y') +
+  # facet_wrap(facets = vars(outcome), ncol = 1, scales = 'free') + 
+  geom_vline(xintercept = 0, linetype = 2) + 
+  geom_point() + 
+  geom_errorbarh(aes(xmax = uci, xmin = lci, height = 0)) + 
+  theme_bw() + 
+  scale_color_manual(values = c('#868686FF', "#CD534CFF" , '#0073C2FF')) +
+  scale_y_discrete(limits=rev) + 
+  coord_cartesian(xlim = c(-0.2, 0.175)) + labs(x = "β (95% CI)") + 
+  theme(
+    text = element_text(size = 8),
+    strip.placement = "outside",
+    strip.background = element_blank(), 
+    strip.text = element_text(face = 'bold'),
+    axis.title.y = element_blank(), 
+    legend.position = 'bottom', 
+    legend.title = element_blank(), 
+    legend.box.spacing = unit(-10, "pt"), 
+    plot.margin = unit(c(0,0,0,0), "pt")
+    )
+
+pg.w = 2.5; pg.h = 3.1
+png('results/plots/Coeff_reg.plot.png', width = pg.w, height = pg.h, units = "in", res = 300)
+pageCreate(width = pg.w, height = pg.h, default.units = "inches")
+
+plotGG(
+  plot = coeff.p,
+  x = 0, y = 0,
+  width = pg.w, height = pg.h, just = c("left", "top")
+)
+
+pageGuideHide()
+dev.off()
+
+
+```
+
+### Mediation Models
+
+```{r}
+
+ExMedRes <- function(med_model, outcome, treat, mediator) {
+  # Extract summary from the mediation model
+  mediation_summary <- summary(med_model)
+  
+  # Create a tibble with relevant components
+  mediation_results <- tibble(
+    term = c("ACME", "ADE", "Total Effect", "Prop. Mediated"),
+    estimate = c(mediation_summary$d0, mediation_summary$z0, mediation_summary$tau.coef, mediation_summary$n0),
+    conf.low = c(mediation_summary$d0.ci[1], mediation_summary$z0.ci[1], mediation_summary$tau.ci[1], mediation_summary$n0.ci[1]),
+    conf.high = c(mediation_summary$d0.ci[2], mediation_summary$z0.ci[2], mediation_summary$tau.ci[2], mediation_summary$n0.ci[2]),
+    p.value = c(mediation_summary$d0.p, mediation_summary$z0.p, mediation_summary$tau.p, mediation_summary$n0.p),
+    outcome = outcome,        # Add the outcome variable
+    treat = treat,            # Add the treatment variable
+    mediator = mediator       # Add the mediator variable
+  )
+  
+  return(mediation_results)
+}
+
+## mtDNAcn -> path -> cog 
+cog_gpath_mtcn.m <- lm(gpath ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
+cog_gpath_mtcn.y <- lm(cogng_demog_slope ~ z_mtcn + gpath + age_death + msex + apoe + tissue, data = rosmap.cc)
+
+cog_gpath_mtcn.med <- mediate(cog_gpath_mtcn.m, cog_gpath_mtcn.y, treat = "z_mtcn", mediator = "gpath", boot = T, sims = 5000)
+summary(cog_gpath_mtcn.med)
+cog_gpath_mtcn.df <- ExMedRes(cog_gpath_mtcn.med, 'cog', 'z_mtcn', 'gpath')
+
+##  path -> mtDNAcn -> cog 
+cog_mtcn_gpath.m <- lm(z_mtcn ~ gpath + age_death + msex + apoe + tissue, data = rosmap.cc)
+cog_mtcn_gpath.y <- lm(cogng_demog_slope ~ z_mtcn + gpath + age_death + msex + apoe + tissue, data = rosmap.cc)
+
+cog_mtcn_gpath.med <- mediate(cog_mtcn_gpath.m, cog_mtcn_gpath.y, treat = "gpath", mediator = "z_mtcn", boot = T, sims = 1000)
+summary(cog_mtcn_gpath.med)
+cog_mtcn_gpath.df <- ExMedRes(cog_mtcn_gpath.med, 'cog', 'gpath', 'z_mtcn')
+
+## DNAm -> path -> cog 
+cog_gpath_dnam.m <- lm(gpath ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.cc)
+cog_gpath_dnam.y <- lm(cogng_demog_slope ~ z_dnam + gpath + age_death + msex + apoe + tissue, data = rosmap.cc)
+
+cog_gpath_dnam.med <- mediate(cog_gpath_dnam.m, cog_gpath_dnam.y, treat = "z_dnam", mediator = "gpath", boot = T, sims = 5000)
+summary(cog_gpath_dnam.med)
+cog_gpath_dnam.df <- ExMedRes(cog_gpath_dnam.med, 'cog', 'z_dnam', 'gpath')
+
+## DNAm -> mtDNAcn -> path 
+gpath_mtcn_dnam.m <- lm(z_mtcn ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.cc)
+gpath_mtcn_dnam.y <- lm(gpath ~ z_dnam + z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc, sims = 1000)
+
+gpath_mtcn_dnam.med <- mediate(gpath_mtcn_dnam.m, gpath_mtcn_dnam.y, treat = "z_dnam", mediator = "z_mtcn", boot = T)
+summary(gpath_mtcn_dnam.med)
+gpath_mtcn_dnam.df <- ExMedRes(gpath_mtcn_dnam.med, 'gpath', 'z_dnam', 'z_mtcn')
+
+## mtDNAcn -> DNAm -> path 
+gpath_dnam_mtcn.m <- lm(z_dnam ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
+gpath_dnam_mtcn.y <- lm(gpath ~ z_dnam + z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
+
+gpath_dnam_mtcn.med <- mediate(gpath_dnam_mtcn.m, gpath_dnam_mtcn.y, treat = "z_mtcn", mediator = "z_dnam", boot = T)
+summary(gpath_dnam_mtcn.med)
+gpath_dnam_mtcn.df <- ExMedRes(gpath_dnam_mtcn.med, 'gpath', 'z_mtcn', 'z_dnam')
+
+## DNAm -> mtDNAcn -> cog 
+cog_mtcn_dnam.m <- lm(z_mtcn ~ z_dnam + age_death + msex + apoe + tissue, data = rosmap.cc)
+cog_mtcn_dnam.y <- lm(cogng_demog_slope ~ z_dnam + z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
+
+cog_mtcn_dnam.med <- mediate(cog_mtcn_dnam.m, cog_mtcn_dnam.y, treat = "z_dnam", mediator = "z_mtcn", boot = T, sims = 5000)
+summary(cog_mtcn_dnam.med)
+cog_mtcn_dnam.df <- ExMedRes(cog_mtcn_dnam.med, 'cog', 'z_dnam', 'z_mtcn')
+
+## mtDNAcn  -> DNAm -> cog 
+cog_dnam_mtcn.m <- lm(z_dnam ~ z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
+cog_dnam_mtcn.y <- lm(cogng_demog_slope ~ z_dnam + z_mtcn + age_death + msex + apoe + tissue, data = rosmap.cc)
+
+cog_dnam_mtcn.med <- mediate(cog_dnam_mtcn.m, cog_dnam_mtcn.y, treat = "z_mtcn", mediator = "z_dnam", boot = T)
+summary(cog_dnam_mtcn.med)
+cog_dnam_mtcn.df <- ExMedRes(cog_dnam_mtcn.med, 'cog', 'z_mtcn', 'z_dnam')
+
+## Libra -> DNAm -> cog 
+cog_dnam_libra.m <- lm(z_dnam ~ libra + age_death + msex + apoe + tissue, data = rosmap.cc)
+cog_dnam_libra.y <- lm(cogng_demog_slope ~ z_dnam + libra + age_death + msex + apoe + tissue, data = rosmap.cc)
+
+cog_dnam_libra.med <- mediate(cog_dnam_libra.m, cog_dnam_libra.y, treat = "libra", mediator = "z_dnam", boot = T)
+summary(cog_dnam_libra.med)
+cog_dnam_libra.df <- ExMedRes(cog_dnam_libra.med, 'cog', 'libra', 'z_dnam')
+
+```
+
+```{r}
+med.res <- bind_rows(
+  cog_gpath_mtcn.df, cog_gpath_dnam.df, gpath_mtcn_dnam.df, gpath_dnam_mtcn.df, 
+  cog_mtcn_dnam.df, cog_dnam_mtcn.df, cog_dnam_libra.df
+) %>%
+  relocate(treat, mediator, outcome) %>%
+  # filter(term %in% c('z_dnam', 'z_mtcn', 'gpath', 'libra')) %>%
+  mutate(
+    signif = gtools::stars.pval(p.value), 
+    estimate = round(estimate, 2), 
+    conf.low = round(conf.low, 3), 
+    conf.high = round(conf.high, 3), 
+    p.value = round(p.value, 3), 
+    out = glue::glue("{estimate} ({conf.low}, {conf.high}), P = {p.value}")
+   )
+
+
+med.res %>% filter(str_detect(term, 'Prop.')) 
+med.res %>% filter(outcome == "cog") 
+
+write_csv(med.res, 'results/mediation_results.csv')
+
+```
+
+### SEM
+
+```{r}
+
+sem_cov <- ' 
+ # regressions
+   cogng_demog_slope ~ gpath + age_death + msex + apoe4 + tissue
+   cogng_demog_slope ~ z_dnam + age_death + msex + apoe4 + tissue
+   cogng_demog_slope ~ z_mtcn+ age_death + msex + apoe4 + tissue
+   gpath ~ z_dnam + age_death + msex + apoe4 + tissue
+   gpath ~ z_mtcn + age_death + msex + apoe4 + tissue
+   z_mtcn ~ z_dnam + age_death + msex + apoe4 + tissue
+   z_dnam ~ libra + age_death + msex + apoe4 + tissue
+'
+
+sem_cov.res <- sem(model = sem_cov, data = rosmap.df, missing = 'ML') 
+summary(sem_cov.res,standardized=TRUE)
+
+```
+
+```{r}
+## SEM Mediation Models 
+
+sem_cov_mediation <- '
+  # Regression equations
+  # Cognitive decline regressed on gpath, z_dnam, z_mtcn, and covariates
+    cogng_demog_slope ~ b1*gpath + b2*z_dnam + b3*z_mtcn + b4*age_death + b5*msex + b6*apoe4 + b7*tissue
+
+  # Global AD pathology regressed on z_dnam, z_mtcn, and covariates
+    gpath ~ a1*z_dnam + a2*z_mtcn + a3*age_death + a4*msex + a5*apoe4 + a6*tissue
+
+  # mtDNA copy number regressed on z_dnam and covariates
+    z_mtcn ~ c1*z_dnam + c2*age_death + c3*msex + c4*apoe4 + c5*tissue
+
+  # DNAm age acceleration regressed on LIBRA score and covariates
+    z_dnam ~ d1*libra + d2*age_death + d3*msex + d4*apoe4 + d5*tissue
+
+  # Indirect effects
+  # Indirect effect of z_dnam on cognitive decline via gpath
+    indirect_zdnam_gpath_cog := a1 * b1
+
+  # Indirect effect of z_mtcn on cognitive decline via gpath
+    indirect_zmtcn_gpath_cog := a2 * b1
+
+  # Indirect effect of z_dnam on cognitive decline via z_mtcn
+    indirect_zdnam_mtcn_cog := c1 * b3
+
+  # Indirect effect of z_dnam on cognitive decline via z_mtcn and gpath
+    indirect_zdnam_mtcn_gpath_cog := c1 * a2 * b1
+
+  # Total indirect effect of z_dnam on cognitive decline
+    total_indirect_zdnam_cog := indirect_zdnam_gpath_cog + indirect_zdnam_mtcn_cog + indirect_zdnam_mtcn_gpath_cog
+
+  # Total effect of z_dnam on cognitive decline
+    total_effect_zdnam_cog := b2 + total_indirect_zdnam_cog
+
+'
+
+semMedi.fit <- sem(model = sem_cov_mediation, data = rosmap.df, missing = 'ML') 
+summary(semMedi.fit,standardized=TRUE, fit=TRUE )
+
+semPlot::semPaths(fit, whatLabels = "std", edge.label.cex = .5, layout = "tree2", rotation = 2, style = "lisrel", intercepts = FALSE, residuals = TRUE, curve = 1, curvature = 3, nCharNodes = 8, sizeMan = 6, sizeMan2 = 3, optimizeLatRes = TRUE, edge.color = "#000000")
+```
+
+```{r}
+sem.out <- standardizedSolution(semMedi.fit) %>%
+  filter(op == "~") %>%
+  # filter(rhs %in% c('z_dnam', 'z_mtcn', 'gpath', 'libra')) %>%
+    mutate(
+    signif = gtools::stars.pval(pvalue), 
+    est.std = round(est.std, 2), 
+    ci.lower = round(ci.lower, 3), 
+    ci.upper = round(ci.upper, 3), 
+    pvalue = round(pvalue, 3), 
+    out = glue::glue("{est.std} ({ci.lower}, {ci.upper}), P = {pvalue}")
+   )
+
+write_csv(sem.out, "results/sem_results.csv")
+```
+
+```{r}
+
+cog_res <- residuals(lm(cogng_demog_slope ~ age_death + msex + apoe4 + tissue, data = rosmap.cc ))
+mtcn_res <- residuals(lm(z_mtcn ~ age_death + msex + apoe4 + tissue, data = rosmap.cc ))
+dnam_res <- residuals(lm(z_dnam ~ age_death + msex + apoe4 + tissue, data = rosmap.cc ))
+gpath_res <- residuals(lm(gpath ~ age_death + msex + apoe4 + tissue, data = rosmap.cc ))
+libra_res <- residuals(lm(libra ~ age_death + msex + apoe4 + tissue, data = rosmap.cc ))
+
+sem.df <- tibble(
+  cog = cog_res,
+  gpath = gpath_res,
+  mtcn = mtcn_res,
+  dnam = dnam_res,
+  libra = libra_res
+)
+
+myModel <- ' 
+ # regressions
+   cog ~ gpath
+   cog ~ dnam 
+   cog ~ mtcn 
+   gpath ~ dnam 
+   gpath ~ mtcn 
+   mtcn ~ dnam 
+   dnam ~ libra 
+'
+
+fit <- sem(model = myModel, data = sem.df, missing = 'ML') 
+summary(fit,standardized=TRUE)
+
+
+myModel <- ' 
+  # Direct effects
+  cog ~ c1*gpath + c2*dnam + c3*mtcn
+  gpath ~ b1*dnam + b2*mtcn
+  mtcn ~ a1*dnam
+  dnam ~ libra
+
+  # Indirect effects (mediation)
+  # mtDNAcn to cognitive decline via pathology
+  indirect_mtDNAcn_cog := b2*c1
+
+  # DNAM to cognitive decline via mtDNAcn and pathology
+  indirect_DNAM_cog := a1*b2*c1 + b1*c1
+
+  # Total effects
+  total_mtDNAcn_cog := c3 + b2*c1
+  total_DNAM_cog := c2 + a1*b2*c1 + b1*c1
+'
+
+# Fit the model with bootstrapping
+fit <- sem(model = myModel, data = sem.df, missing = 'ML')
+
+# View the summary, including standardized estimates and bootstrapped standard errors
+summary(fit, standardized = TRUE, rsquare = TRUE)
+
+semPlot::semPaths(fit, 
+         what = "std",       # Show standardized estimates
+         layout = "tree2",    # Tree layout for clearer hierarchy
+         style = "lisrel",
+         edge.label.cex = 1, # Size of edge labels (path coefficients)
+         curve = TRUE,       # Allow curved paths for readability
+         fade = FALSE,       # Make paths fully visible (no transparency)
+         nCharNodes = 0,     # Show full variable names
+         residuals = FALSE,   # Show residual variances
+         intercepts = FALSE) # Hide intercepts in the diagram
+
+
+
+
+```
