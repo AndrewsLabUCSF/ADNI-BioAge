@@ -52,6 +52,8 @@ fluid_bm.raw <- read_csv("resources/ADNI/ADSP-PHC/Biospecimen_Analyses/ADSP_PHC_
 
 flbm <- fluid_bm.raw %>%
   select(RID, VISCODE, DRAWDATE, PHC_Visit, Platform, PHC_AB42, PHC_Tau, PHC_pTau, AT_class)
+
+
 ```
 
 ```{r}
@@ -92,6 +94,51 @@ mri <- mri.raw %>%
     gm_vol = rowSums(across(c(hipp_vol, amyg_vol, ent_vol, mt_vol, ift_vol, tpol_vol)), na.rm = FALSE),
   )
  
+
+ mri <- mri.raw %>%
+  select(...,
+         # add bilateral surface-area columns
+         rh_entorhinal_area,  lh_entorhinal_area,
+         rh_fusiform_area,     lh_fusiform_area,
+         rh_inferiortemporal_area, lh_inferiortemporal_area,
+         rh_middletemporal_area,   lh_middletemporal_area,
+         rh_inferiorparietal_area,  lh_inferiorparietal_area,
+         rh_precuneus_area,         lh_precuneus_area) %>%
+  mutate(
+    ## 1. Left–right averaged thickness (same as before)
+    ent_thk  = rowMeans(cbind(rh_entorhinal_thickness_combat,
+                              lh_entorhinal_thickness_combat)),
+    fus_thk  = rowMeans(cbind(rh_fusiform_thickness_combat,
+                              lh_fusiform_thickness_combat)),
+    ift_thk  = rowMeans(cbind(rh_inferiortemporal_thickness_combat,
+                              lh_inferiortemporal_thickness_combat)),
+    mt_thk   = rowMeans(cbind(rh_middletemporal_thickness_combat,
+                              lh_middletemporal_thickness_combat)),
+    ifp_thk  = rowMeans(cbind(rh_inferiorparietal_thickness_combat,
+                              lh_inferiorparietal_thickness_combat)),
+    pcun_thk = rowMeans(cbind(rh_precuneus_thickness_combat,
+                              lh_precuneus_thickness_combat)),
+
+    ## 2. Left–right summed surface areas
+    ent_area  = rh_entorhinal_area  + lh_entorhinal_area,
+    fus_area  = rh_fusiform_area    + lh_fusiform_area,
+    ift_area  = rh_inferiortemporal_area + lh_inferiortemporal_area,
+    mt_area   = rh_middletemporal_area   + lh_middletemporal_area,
+    ifp_area  = rh_inferiorparietal_area  + lh_inferiorparietal_area,
+    pcun_area = rh_precuneus_area         + lh_precuneus_area,
+
+    ## 3. Surface-area–weighted meta-ROI thickness
+    cort_thk = (
+        ent_area  * ent_thk  +
+        fus_area  * fus_thk  +
+        ift_area  * ift_thk  +
+        mt_area   * mt_thk   +
+        ifp_area  * ifp_thk  +
+        pcun_area * pcun_thk
+      ) /
+      (ent_area + fus_area + ift_area + mt_area + ifp_area + pcun_area)
+  )
+
 ```
 
 ### Methylation
@@ -167,7 +214,7 @@ mtdnacn <- mtDNAcn.raw %>%
   mutate(
     RID = as.numeric(RID)
   )
-## TODO merge in mtDNAcn 
+
 ```
 
 ### APOE
@@ -462,8 +509,18 @@ adni <- cog.merge %>%
   mutate(
     age_c = PHC_Age_Cognition - mean_age, 
     sex = ifelse(PHC_Sex == 1, "Male", "Female"), 
-    gbl_cog = rowMeans(across(c(PHC_MEM, PHC_EXF, PHC_LAN, PHC_VSP)), na.rm = TRUE)
-  ) %>%
+    gbl_cog = rowMeans(across(c(PHC_MEM, PHC_EXF, PHC_LAN, PHC_VSP)), na.rm = TRUE),
+    race = case_when(
+      PHC_Race == 5 & PHC_Ethnicity == 2 ~ "NHW", 
+      TRUE ~ "other"
+    ),
+    educ_cat = case_when(
+      PHC_Education <= 12                ~ "HighSchool",
+      between(PHC_Education, 13, 16)     ~ "College",
+      PHC_Education >= 17                ~ "Graduate"
+    ), 
+    educ_cat = fct_relevel(educ_cat, 'HighSchool')
+    ) %>%
   filter(!is.na(apoe)) %>%
   # filter(!is.na(CausAge)) %>%
   filter(!is.na(causage_bl)) %>%
@@ -522,7 +579,7 @@ adni <- adni %>%
 ### NeuroImaging 
 ```{r}
 mri.df <- adni %>%
-  select(RID, cohort, VISCODE2, EXAMDATE, PHC_Visit, visit_bl, months, PHC_Sex, PHC_Age_Cognition, age_bl, cdrsb_bl, educ, apoe, mtcn_bl, neutrophil_bl, nk_cell_bl,  b_cell_bl, cd4_t_cell_bl, cd8_t_cell_bl, monocyte_bl, smk, causage_bl, tl_bl, PHC_ScannerBatchName.1, PHC_ScannerManufacturer, PHC_FieldSgth, EstimatedTotalIntraCranialVol_combat, cort_thk, gm_vol) %>%
+  select(RID, cohort, VISCODE2, EXAMDATE, PHC_Visit, visit_bl, months, PHC_Sex, PHC_Age_Cognition, age_bl, cdrsb_bl, educ, educ_cat, apoe, mtcn_bl, neutrophil_bl, nk_cell_bl,  b_cell_bl, cd4_t_cell_bl, cd8_t_cell_bl, monocyte_bl, smk, causage_bl, tl_bl, PHC_ScannerBatchName.1, PHC_ScannerManufacturer, PHC_FieldSgth, EstimatedTotalIntraCranialVol_combat, cort_thk, gm_vol) %>%
   group_by(RID) %>%
   filter(!all(is.na(EstimatedTotalIntraCranialVol_combat))) %>%
   filter(!is.na(EstimatedTotalIntraCranialVol_combat)) %>%
@@ -539,18 +596,19 @@ mri.df <- adni %>%
 ```{r}
 
 flbm.df <- adni %>%
-  select(RID, cohort, VISCODE2, EXAMDATE, PHC_Visit, PHC_Sex, PHC_Age_Cognition, CDRSB, educ, apoe, smk, DRAWDATE, Platform, PHC_AB42, PHC_Tau, PHC_pTau, AT_class, mtcn, CausAge, TL_BP_ADJ, neutrophil, nk_cell,  b_cell, cd4_t_cell, cd8_t_cell, monocyte) %>% 
+  select(RID, cohort, VISCODE2, EXAMDATE, PHC_Visit, PHC_Sex, PHC_Age_Cognition, CDRSB, educ, educ_cat, apoe, smk, DRAWDATE, Platform, PHC_AB42, PHC_Tau, PHC_pTau, AT_class, mtcn, CausAge, TL_BP_ADJ, neutrophil, nk_cell,  b_cell, cd4_t_cell, cd8_t_cell, monocyte) %>% 
   group_by(RID) %>%
   filter(!all(is.na(AT_class))) %>% 
   # ungroup() %>% select(RID, PHC_Visit, PHC_AB42, PHC_Tau, PHC_pTau, AT_class, mtcn, CausAge, TL_BP_ADJ) %>% View()
   mutate(
     # mtcn = ifelse(PHC_Visit > min(PHC_Visit), NA, mtcn)
+    time_dif = EXAMDATE - DRAWDATE
   ) %>%
   ungroup() %>%
   filter(!is.na(AT_class)) %>%
   rename(sex = PHC_Sex, age = PHC_Age_Cognition, cdrsb = CDRSB)
 
-
+flbm.df %>% select(RID, EXAMDATE, DRAWDATE, time_dif) %>% mutate(dif = abs(time_dif)) %>% arrange(-dif)
 ```
 
 
@@ -571,10 +629,12 @@ adni_d <- adni %>%
   summarise(
     PHC_Visit = first(PHC_Visit),
     n_visit = n(),
+    months = max(months),
     cohort = first(cohort),
     age = first(PHC_Age_Cognition), 
     sex = first(sex),
-    educ = first(educ),
+    race = first(race),
+    educ_cat = first(educ_cat),
     cdrsb = first(cdrsb_bl),
     dx = first(PHC_Diagnosis),
     TL = first(TL_BP_ADJ), 
@@ -629,7 +689,10 @@ tbl1 <- adni_d %>%
     all_categorical() ~ "{n} ({p}%)"
     ),
   ) %>%
-    gtsummary::add_n() 
+  gtsummary::add_p(
+    
+  ) %>%
+  gtsummary::add_n() 
 
 tbl1
 
@@ -646,6 +709,36 @@ adni_d %>%
     visits = mean(PHC_Visit), 
     visits_sd = sd(PHC_Visit)
   )
+
+mean(adni_d$age); sd(adni_d$age)
+mean(adni_d$months) / 12; sd(adni_d$months) / 12
+count(adni_d, sex) %>% mutate(prop = n / sum(n))
+count(adni_d, dx) %>% mutate(prop = n / sum(n))
+# 1=Hispanic; 2=Not Hispanic 
+# 1=AI/AN; 2=Asian; 3=Black; 4=NHPI; 5=White; 6=Other
+count(adni_d, race) %>% mutate(prop = n / sum(n))
+
+## BioAge Posthoc 
+
+describe_distribution(adni_d, select = c("TL", "mtDNAcn", "CausAge", 'PHC_Diagnosis'))
+
+# Telomere Length (TL)
+anova_TL <- aov(TL ~ dx, data = adni_d)
+summary(anova_TL)
+tukey_TL <- TukeyHSD(anova_TL)
+print(tukey_TL)
+
+# mtDNA Copy Number (mtDNAcn)
+anova_mtDNAcn <- aov(mtDNAcn ~ dx, data = adni_d)
+summary(anova_mtDNAcn)
+tukey_mtDNAcn <- TukeyHSD(anova_mtDNAcn)
+print(tukey_mtDNAcn)
+
+# CausAge
+anova_CausAge <- aov(CausAge ~ dx, data = adni_d)
+summary(anova_CausAge)
+tukey_CausAge <- TukeyHSD(anova_CausAge)
+print(tukey_CausAge)
 
 ```
 
@@ -676,6 +769,49 @@ BioAge_corr.p <- summary(res_cor) %>%
     )
 BioAge_corr.p
 ggsave(glue("results/plots/bioag_corrplot_{DATE}.png"), plot = BioAge_corr.p, width = 11, height = 6, units = 'in')
+
+## Only main predictors
+res_cor <- adni_d %>%
+  select(
+    # BioAge
+    age, TL, mtDNAcn, CausAge,  
+    # AD Endophenotypes
+    gbl_cog, cort_thk, gm_vol, PHC_AB42, PHC_Tau, PHC_pTau
+    ) %>%
+  rename(Age = age, `Global Cog.` = gbl_cog, `Cort. Thick.` = cort_thk, `GM Vol.` = gm_vol, AB42 = PHC_AB42, Tau = PHC_Tau, pTau = PHC_pTau) %>%
+  correlation(
+    p_adjust = 'fdr'
+  )
+summary(res_cor)
+
+main_corr.p <- summary(res_cor) %>% 
+  plot() + 
+    theme_bw(
+      base_size = 15,
+    ) + 
+    theme(
+      text = element_text(size = 10), 
+      axis.text.x = element_text(angle = 25, hjust = 1) 
+    )
+main_corr.p
+ggsave(glue("results/plots/main_corrplot_{DATE}.png"), plot = main_corr.p, width = 9, height = 4, units = 'in')
+ggsave(glue("results/plots/main_corrplot_{DATE}_paper.png"), plot = main_corr.p, width = 7, height = 4, units = 'in')
+
+## Statified by AT class
+flbm.df %>%
+  filter(AT_class %in% c('A-T+', 'A-T-')) %>% 
+  # filter(AT_class %in% c('A+T+', 'A+T-')) %>%
+  select(
+      # BioAge
+      age, TL_BP_ADJ, mtcn, CausAge,  
+      # AD Endophenotypes
+      PHC_AB42, PHC_Tau, PHC_pTau
+      ) %>%
+    rename(Age = age, AB42 = PHC_AB42, Tau = PHC_Tau, pTau = PHC_pTau, TL = TL_BP_ADJ, mtDNAcn = mtcn) %>%
+    correlation(
+      p_adjust = 'none'
+    )
+summary(res_cor)
 
 ```
 

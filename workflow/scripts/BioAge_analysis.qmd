@@ -30,7 +30,10 @@ cog.df <- adni %>%
   group_by(RID) %>%
   slice_min(PHC_Visit) %>%
   ungroup()
-mri.df <- read_csv('intermediate/mri.csv')
+mri.df <- read_csv('intermediate/mri.csv') %>%
+  mutate(
+    apoe = fct_relevel(apoe, "e3/e3")
+  )
 flbm.df <- read_csv('intermediate/flbm.csv')
 
 adni %>% 
@@ -64,7 +67,7 @@ summary(fitlmer.02c)
 ```
 
 ```{r}
-cog_bllm_cov <- "age_bl + sex + educ + cdrsb_bl + apoe + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+cog_bllm_cov <- "age_bl + sex + educ_cat + cdrsb_bl + apoe + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
 
 lm(glue("gbl_cog ~ {cog_bllm_cov}  +  mtcn_bl + causage_bl + tl_bl"), data = cog.df) %>% tidy()
 lm(glue("gbl_cog ~ {cog_bllm_cov}  +  mtcn_bl * causage_bl * tl_bl"), data = cog.df) %>% tidy()
@@ -77,7 +80,7 @@ lm(glue("gbl_cog ~ {cog_bllm_cov}  +  causage_bl + mtcn_bl * tl_bl"), data = cog
 #### Longitudinal
 ```{r}
 
-cog_lt_cov <- "months_c + age_bl*months_c + sex + educ + cdrsb_bl*months_c + apoe*months_c + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+cog_lt_cov <- "months_c + age_bl*months_c + sex + educ_cat + cdrsb_bl*months_c + apoe*months_c + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
 
 ## Longitudional
 fitlmer.03 <- lmer(glue("gbl_cog ~ {cog_lt_cov} + (months_c  | RID)"), 
@@ -174,7 +177,7 @@ gbl_cog_mtcn.p <- plot_model(fitlmer.03d, type = "pred", terms = c("months_c", "
     legend.text = element_text(size = 8)
   )
 
-gbl_cog_bioage.p <- plot_grid(gbl_cog_tl.p, gbl_cog_dnam.p, gbl_cog_mtcn.p, nrow = 1, labels = c("A", "B", "C"))
+gbl_cog_bioage.p <- cowplot::plot_grid(gbl_cog_tl.p, gbl_cog_dnam.p, gbl_cog_mtcn.p, nrow = 1, labels = c("A", "B", "C"))
 gbl_cog_bioage.p
 
 ggsave(glue("results/plots/gbl_cog_bioage_{DATE}.png"), plot = gbl_cog_bioage.p, width = 9, height = 4, units = 'in')
@@ -226,7 +229,7 @@ gbl_cog_x.res <- bind_rows(
     out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
   ) 
   
-glbl_gog_x.res  %>% 
+gbl_cog_x.res  %>% 
   print(n = Inf)
 
 ```
@@ -271,7 +274,7 @@ gbl_cog_mtcnxdnam.p <- plot_model(fitlmer.04c, type = "pred", terms = c("z_mtcn_
     legend.text = element_text(size = 8)
   )
 
-gbl_cog_bioage_interactions.p <- plot_grid(gbl_cog_tlxdnam.p, gbl_cog_mtcnxtl.p, gbl_cog_mtcnxdnam.p, nrow = 1, labels = c("A", "B", "C"))
+gbl_cog_bioage_interactions.p <- cowplot::plot_grid(gbl_cog_tlxdnam.p, gbl_cog_mtcnxtl.p, gbl_cog_mtcnxdnam.p, nrow = 1, labels = c("A", "B", "C"))
 gbl_cog_bioage_interactions.p
 
 ggsave(glue("results/plots/gbl_cog_bioage_interactions_{DATE}.png"), plot = gbl_cog_bioage_interactions.p, width = 9, height = 4, units = 'in')
@@ -301,7 +304,7 @@ summary(fitlmer.05c)
 #### Episodic Memory
 ```{r}
 
-cog_lt_cov <- "months_c + age_bl*months_c + sex + educ + cdrsb_bl*months_c + apoe*months_c + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+cog_lt_cov <- "months_c + age_bl*months_c + sex + educ_cat + cdrsb_bl*months_c + apoe*months_c + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
 
 ## Longitudional
 fitlmer.mem_tl <- lmer(
@@ -760,7 +763,7 @@ plot_model(ab42_dnamxtl.res, type = "pred", terms = c("CausAge", "TL_BP_ADJ")) +
 ### Cortical Thickness
 ```{r}
 ## Cortical Thickness meta ROI
-cort_thk_covar = "age_bl + sex + apoe + cdrsb_bl + PHC_ScannerBatchName.1 + months + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+cort_thk_covar = "age_bl + sex + apoe + cdrsb_bl + months + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
 
 cort_thk_mtcn.res <- lm(glue("cort_thk ~ mtcn_bl + {cort_thk_covar}"), data = mri.df)
 cort_thk_dnam.res <- lm(glue("cort_thk ~ causage_bl + {cort_thk_covar}"), data = mri.df) 
@@ -773,10 +776,15 @@ cort_thk_mtcnxdnam.res <- lm(glue("cort_thk ~ mtcn_bl * causage_bl + {cort_thk_c
 cort_thk_mtcnxdnamxtl.res <- lm(glue("cort_thk ~ mtcn_bl * causage_bl * tl_bl + {cort_thk_covar}"), data = mri.df) 
 ```
 
+```{r}
+plot_model(cort_thk_dnamxtl.res, type = "pred", terms = c("causage_bl", "tl_bl"))
+
+```
+
 ### Gray Matter Volume
 ```{r}
 ## Gray matter volume meta ROI
-gm_vol_covar = "age_bl + sex + apoe + cdrsb_bl + PHC_ScannerBatchName.1 + months + EstimatedTotalIntraCranialVol_combat + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+gm_vol_covar = "age_bl + sex + apoe + cdrsb_bl + months + EstimatedTotalIntraCranialVol_combat + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
 
 gmvol_mtcn.res <- lm(glue("gm_vol ~ mtcn_bl + {gm_vol_covar}"), data = mri.df) 
 gmvol_dnam.res <- lm(glue("gm_vol ~ causage_bl + {gm_vol_covar}"), data = mri.df) 
@@ -788,6 +796,8 @@ gmvol_mtcnxtl.res <- lm(glue("gm_vol ~ mtcn_bl * tl_bl + {gm_vol_covar}"), data 
 gmvol_mtcnxdnam.res <- lm(glue("gm_vol ~ mtcn_bl * causage_bl + {gm_vol_covar}"), data = mri.df) 
 gmvol_mtcnxdnamxtl.res <- lm(glue("gm_vol ~ mtcn_bl * causage_bl * tl_bl + {gm_vol_covar}"), data = mri.df)
 
+plot_model(gmvol_mtcnxdnamxtl.res, type = "pred", terms = c("mtcn_bl", "causage_bl", "tl_bl"))
+plot_model(gmvol_mtcnxdnamxtl.res, type = "int")
 ```
 
 ### Results
@@ -825,7 +835,12 @@ mri.res <- bind_rows(
 
 mri.res %>%
   filter(term %in% c('mtcn_bl', 'causage_bl', 'tl_bl')) %>%
-  filter(model == 'main')  %>%
+  filter(model %in% c('mtDNAcn', 'DNAm', 'TL'))  %>%
+  select(outcome, model, term, out)
+
+mri.res %>%
+  filter(term %in% c('mtcn_bl', 'causage_bl', 'tl_bl')) %>%
+  filter(model %in% c('bioage'))  %>%
   select(outcome, model, term, out)
 
 mri.res %>%
@@ -837,7 +852,7 @@ mri.res %>%
 ```{r}
 mri_coef.p <- mri.res %>%
   filter(term %in% c('mtcn_bl', 'causage_bl', 'tl_bl')) %>%
-  filter(model == 'main') %>%
+  filter(model == 'bioage') %>%
   mutate(
     term = case_when(
       term == "mtcn_bl" ~ 'mtDNAcn', 
@@ -846,7 +861,7 @@ mri_coef.p <- mri.res %>%
     )
   ) %>%
   ggplot(., aes(x = estimate, y = term)) + 
-  facet_grid(rows = vars(outcome)) + 
+  facet_grid(rows = vars(outcome), scales = 'free') + 
   geom_point() + 
   geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
@@ -863,11 +878,14 @@ mri_coef.p
 ggsave(glue("results/plots/mri_bioage_{DATE}.png"), plot = mri_coef.p, width = 9, height = 4, units = 'in')
 
 
+
+
 ```
 
 ## Summarize Results
 
 ```{r}
+#| label: results_all
 
 cog_summary.res <- bind_rows(
     mem.res, 
@@ -877,6 +895,7 @@ cog_summary.res <- bind_rows(
   ) %>% 
   mutate(
     endophenotype = 'Cognition',
+    model = ifelse(str_detect(model, 'CausAge'), "DNAm", model),
     model2 = case_when(
       model %in% c('TL', 'DNAm', 'mtDNAcn') ~ 'Single',
       model == 'BioAge' ~ 'Joint', 
@@ -888,7 +907,7 @@ cog_summary.res <- bind_rows(
       model == 'BioAge' & str_detect(term, 'z_dnam_bl') ~ "DNAm",
       TRUE ~ model
     ),
-    outcome = fct_recode(outcome, 'Memory' = 'mem', "Language" = 'lan', 'Executive Function' = 'exf', 'Visuospatial ability, or ' = 'vsp'),
+    outcome = fct_recode(outcome, 'Memory' = 'mem', "Language" = 'lan', 'Executive Function' = 'exf', 'Visuospatial ability' = 'vsp'),
     outcome = case_when(
       str_detect(term, "months") ~ paste0(outcome, " Decline"), 
       TRUE ~ outcome
@@ -1037,8 +1056,35 @@ ggsave(glue("results/plots/results_{DATE}.png"), plot = res.p , width = 9, heigh
 
 ```
 
+```{r}
+#| label: export_results_all
+
+res.out <- res %>% 
+  mutate(
+    out = glue("{estimate} ({std.error}){sig}")
+  ) %>%
+  select(outcome, model, term, out) %>%
+  pivot_wider(
+    names_from = outcome,
+    values_from = out
+  ) %>%
+  unite("Global Cognition", c("Global Cognition", "Global Cognitive Decline"), sep = "; ") %>%
+  unite("Memory", c("Memory", "Memory Decline"), sep = "; ") %>%
+  unite("Executive Function", c("Executive Function", "Executive Function Decline"), sep = "; ") %>%
+  unite("Language", c("Language", "Language Decline"), sep = "; ") %>%
+  unite("Visualspatial", c("Visuospatial ability", "Visuospatial ability Decline"), sep = "; ")
+
+res.out
+
+write_csv(res.out, glue("results/all_results_{DATE}.csv"))
+
+
+```
+
 
 ```{r}
+#| label: export_cog_results
+
 
 cog_bioage.out <- bind_rows(
     gbl_cog_bioage.res, gbl_cog_x.res, 
@@ -1088,6 +1134,8 @@ cog_bioage.out  %>%
 ```
 
 ```{r}
+#| label: export_csf_results
+
 csf_res.out <- csf.res %>%
   mutate(
     sig = stars.pval(p.value), 
@@ -1130,6 +1178,8 @@ csf_res.out  %>%
 
 
 ```{r}
+#| label: export_mri_results
+
 mri_res.out <- mri.res %>%
   mutate(
     sig = stars.pval(p.value), 
@@ -1141,7 +1191,8 @@ mri_res.out <- mri.res %>%
     term = fct_relevel(term, 
       "(Intercept)", "age_bl", 'months', "sex", "cdrsb_bl", 'apoee2+', "apoee4+", 
       "b_cell_bl", "cd4_t_cell_bl", "cd8_t_cell_bl", "nk_cell_bl", "monocyte_bl", 
-      "EstimatedTotalIntraCranialVol_combat", "PHC_ScannerBatchName.1ADNI2/GO_3.0", "PHC_ScannerBatchName.1ADNI3_3.0_GE", "PHC_ScannerBatchName.1ADNI3_3.0_Philips", "PHC_ScannerBatchName.1ADNI3_3.0_Siemens", 
+      "EstimatedTotalIntraCranialVol_combat", 
+      # "PHC_ScannerBatchName.1ADNI2/GO_3.0", "PHC_ScannerBatchName.1ADNI3_3.0_GE", "PHC_ScannerBatchName.1ADNI3_3.0_Philips", "PHC_ScannerBatchName.1ADNI3_3.0_Siemens", 
       "tl_bl", "causage_bl", "mtcn_bl", "causage_bl:mtcn_bl", "mtcn_bl:tl_bl", "causage_bl:tl_bl", "causage_bl:mtcn_bl:tl_bl"
       )
   ) %>%
@@ -1177,51 +1228,51 @@ mri_res.out  %>%
 ```{r}
 main = tribble(
   ~outcome, ~BioAge, ~predictors, ~covariates, ~random,
-  'PHC_MEM', 'Age', 'months', 'age_bl + sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
-  # 'PHC_MEM', 'TL', 'z_tl_bl', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  # 'PHC_MEM', 'CausAge', 'causage_bl', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'Joint', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'Interaction', 'mtcn*z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Age', 'months', 'age_bl + sex + educ_cat + apoe + months + cdrsb_bl', '(months | RID)',
+  # 'PHC_MEM', 'TL', 'z_tl_bl', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  # 'PHC_MEM', 'CausAge', 'causage_bl', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Joint', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Interaction', 'mtcn*z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
   ## EXF
-  'PHC_EXF', 'Age', 'months', 'age_bl + sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'Joint', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'Interaction', 'mtcn*z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Age', 'months', 'age_bl + sex + educ_cat + apoe + months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Joint', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Interaction', 'mtcn*z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
   ## LAN
-  'PHC_LAN', 'Age', 'months', 'age_bl + sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Age', 'months', 'age_bl + sex + educ_cat + apoe + months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_LAN', 'Joint', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'Interaction', 'mtcn*z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Joint', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Interaction', 'mtcn*z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
   ## VSP
-  'PHC_VSP', 'Age', 'months', 'age_bl + sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'Joint', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'Interaction', 'mtcn*z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Age', 'months', 'age_bl + sex + educ_cat + apoe + months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Joint', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Interaction', 'mtcn*z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
 ) %>%
   mutate(eq = glue('{outcome} ~ {predictors} + {covariates} + {random}'),
@@ -1335,197 +1386,197 @@ main %>%
 ```{r}
 all = tribble(
   ~outcome, ~BioAge, ~predictors, ~covariates, ~random,
-  'PHC_MEM', 'Age', 'months', 'sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
- # 'PHC_MEM', 'TL', 'z_tl_bl', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
- # 'PHC_MEM', 'CausAge', 'causage_bl', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'PhenoAge', 'phenoage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'Horvathv2', 'horvath_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'Hannum', 'hannum_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'Lin', 'lin_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'DNAmGrimAgev2', 'grimage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'AgeAccelGrimv2', 'ageaccelgrim_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'DunedinPACE', 'dunedinpace_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Age', 'months', 'sex + educ_cat + apoe + months + cdrsb_bl', '(months | RID)',
+ # 'PHC_MEM', 'TL', 'z_tl_bl', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+ # 'PHC_MEM', 'CausAge', 'causage_bl', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'PhenoAge', 'phenoage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Horvathv2', 'horvath_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Hannum', 'hannum_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Lin', 'lin_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'DNAmGrimAgev2', 'grimage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'AgeAccelGrimv2', 'ageaccelgrim_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'DunedinPACE', 'dunedinpace_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_MEM', 'CausAge AAA', 'causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'PhenoAge AAA', 'phenoage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'Horvathv2 AAA', 'horvath_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'Hannum AAA', 'hannum_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'Lin AAA', 'lin_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'DNAmGrimAgev2 AAA', 'grimage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'CausAge AAA', 'causeage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'PhenoAge AAA', 'phenoage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Horvathv2 AAA', 'horvath_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Hannum AAA', 'hannum_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Lin AAA', 'lin_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'DNAmGrimAgev2 AAA', 'grimage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_MEM', 'CausAge RAA', 'causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'PhenoAge RAA', 'phenoage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'Horvathv2 RAA', 'horvath_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'Hannum RAA', 'hannum_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'Lin RAA', 'lin_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'CausAge RAA', 'causage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'PhenoAge RAA', 'phenoage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Horvathv2 RAA', 'horvath_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Hannum RAA', 'hannum_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Lin RAA', 'lin_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_MEM', 'CausAge IRAA', 'causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'PhenoAge IRAA', 'phenoage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'Horvathv2 IRAA', 'horvath_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'Hannum IRAA', 'hannum_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'Lin IRAA', 'lin_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'CausAge IRAA', 'causage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'PhenoAge IRAA', 'phenoage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Horvathv2 IRAA', 'horvath_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Hannum IRAA', 'hannum_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'Lin IRAA', 'lin_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_MEM', 'TL_CausAge_mtcn', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TL_CausAge_mtcn', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_MEM', 'TL_CausAge_mtcn AAA', 'causeage_aaa_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'TL_CausAge_mtcn RAA', 'causage_raa_bl*months + z_tl_bl*months + z_mtcn', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'TL_CausAge_mtcn IRAA', 'causage_iraa_bl*months + z_tl_bl*months + z_mtcn', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TL_CausAge_mtcn AAA', 'causeage_aaa_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TL_CausAge_mtcn RAA', 'causage_raa_bl*months + z_tl_bl*months + z_mtcn', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TL_CausAge_mtcn IRAA', 'causage_iraa_bl*months + z_tl_bl*months + z_mtcn', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_MEM', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_MEM', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_MEM', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
   ## EXF
-  'PHC_EXF', 'Age', 'months', 'sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'PhenoAge', 'phenoage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'Horvathv2', 'horvath_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'Hannum', 'hannum_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'Lin', 'lin_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'DNAmGrimAgev2', 'grimage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'AgeAccelGrimv2', 'ageaccelgrim_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'DunedinPACE', 'dunedinpace_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Age', 'months', 'sex + educ_cat + apoe + months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'PhenoAge', 'phenoage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Horvathv2', 'horvath_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Hannum', 'hannum_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Lin', 'lin_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'DNAmGrimAgev2', 'grimage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'AgeAccelGrimv2', 'ageaccelgrim_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'DunedinPACE', 'dunedinpace_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_EXF', 'CausAge AAA', 'causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'PhenoAge AAA', 'phenoage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'Horvathv2 AAA', 'horvath_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'Hannum AAA', 'hannum_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'Lin AAA', 'lin_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'DNAmGrimAgev2 AAA', 'grimage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'CausAge AAA', 'causeage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'PhenoAge AAA', 'phenoage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Horvathv2 AAA', 'horvath_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Hannum AAA', 'hannum_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Lin AAA', 'lin_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'DNAmGrimAgev2 AAA', 'grimage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
   
-  'PHC_EXF', 'CausAge RAA', 'causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'PhenoAge RAA', 'phenoage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'Horvathv2 RAA', 'horvath_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'Hannum RAA', 'hannum_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'Lin RAA', 'lin_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'CausAge RAA', 'causage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'PhenoAge RAA', 'phenoage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Horvathv2 RAA', 'horvath_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Hannum RAA', 'hannum_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Lin RAA', 'lin_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_EXF', 'CausAge IRAA', 'causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'PhenoAge IRAA', 'phenoage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'Horvathv2 IRAA', 'horvath_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'Hannum IRAA', 'hannum_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'Lin IRAA', 'lin_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'CausAge IRAA', 'causage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'PhenoAge IRAA', 'phenoage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Horvathv2 IRAA', 'horvath_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Hannum IRAA', 'hannum_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'Lin IRAA', 'lin_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_EXF', 'TL_CausAge_mtcn', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TL_CausAge_mtcn', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_EXF', 'TL_CausAge AAA', 'causeage_aaa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'TL_CausAge RAA', 'causage_raa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'TL_CausAge IRAA', 'causage_iraa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TL_CausAge AAA', 'causeage_aaa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TL_CausAge RAA', 'causage_raa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TL_CausAge IRAA', 'causage_iraa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_EXF', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_EXF', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_EXF', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
   ## LAN
-  'PHC_LAN', 'Age', 'months', 'sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'PhenoAge', 'phenoage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'Horvathv2', 'horvath_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'Hannum', 'hannum_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'Lin', 'lin_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'DNAmGrimAgev2', 'grimage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'AgeAccelGrimv2', 'ageaccelgrim_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'DunedinPACE', 'dunedinpace_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Age', 'months', 'sex + educ_cat + apoe + months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'PhenoAge', 'phenoage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Horvathv2', 'horvath_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Hannum', 'hannum_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Lin', 'lin_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'DNAmGrimAgev2', 'grimage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'AgeAccelGrimv2', 'ageaccelgrim_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'DunedinPACE', 'dunedinpace_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_LAN', 'CausAge AAA', 'causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'PhenoAge AAA', 'phenoage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'Horvathv2 AAA', 'horvath_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'Hannum AAA', 'hannum_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'Lin AAA', 'lin_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'DNAmGrimAgev2 AAA', 'grimage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'CausAge AAA', 'causeage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'PhenoAge AAA', 'phenoage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Horvathv2 AAA', 'horvath_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Hannum AAA', 'hannum_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Lin AAA', 'lin_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'DNAmGrimAgev2 AAA', 'grimage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
   
-  'PHC_LAN', 'CausAge RAA', 'causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'PhenoAge RAA', 'phenoage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'Horvathv2 RAA', 'horvath_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'Hannum RAA', 'hannum_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'Lin RAA', 'lin_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'CausAge RAA', 'causage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'PhenoAge RAA', 'phenoage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Horvathv2 RAA', 'horvath_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Hannum RAA', 'hannum_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Lin RAA', 'lin_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_LAN', 'CausAge IRAA', 'causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'PhenoAge IRAA', 'phenoage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'Horvathv2 IRAA', 'horvath_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'Hannum IRAA', 'hannum_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'Lin IRAA', 'lin_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'CausAge IRAA', 'causage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'PhenoAge IRAA', 'phenoage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Horvathv2 IRAA', 'horvath_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Hannum IRAA', 'hannum_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'Lin IRAA', 'lin_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_LAN', 'TL_CausAge_mtcn', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TL_CausAge_mtcn', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_LAN', 'TL_CausAge AAA', 'causeage_aaa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'TL_CausAge RAA', 'causage_raa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'TL_CausAge IRAA', 'causage_iraa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TL_CausAge AAA', 'causeage_aaa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TL_CausAge RAA', 'causage_raa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TL_CausAge IRAA', 'causage_iraa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_LAN', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_LAN', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_LAN', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
   ## VSP
-  'PHC_VSP', 'Age', 'months', 'sex + educ + apoe + months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'PhenoAge', 'phenoage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'Horvathv2', 'horvath_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'Hannum', 'hannum_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'Lin', 'lin_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'DNAmGrimAgev2', 'grimage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'AgeAccelGrimv2', 'ageaccelgrim_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'DunedinPACE', 'dunedinpace_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Age', 'months', 'sex + educ_cat + apoe + months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TL', 'z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'mtDNAcn', 'z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'CausAge', 'causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'PhenoAge', 'phenoage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Horvathv2', 'horvath_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Hannum', 'hannum_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Lin', 'lin_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'DNAmGrimAgev2', 'grimage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'AgeAccelGrimv2', 'ageaccelgrim_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'DunedinPACE', 'dunedinpace_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_VSP', 'CausAge AAA', 'causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'PhenoAge AAA', 'phenoage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'Horvathv2 AAA', 'horvath_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'Hannum AAA', 'hannum_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'Lin AAA', 'lin_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'DNAmGrimAgev2 AAA', 'grimage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'CausAge AAA', 'causeage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'PhenoAge AAA', 'phenoage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Horvathv2 AAA', 'horvath_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Hannum AAA', 'hannum_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Lin AAA', 'lin_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'DNAmGrimAgev2 AAA', 'grimage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
   
-  'PHC_VSP', 'CausAge RAA', 'causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'PhenoAge RAA', 'phenoage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'Horvathv2 RAA', 'horvath_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'Hannum RAA', 'hannum_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'Lin RAA', 'lin_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'CausAge RAA', 'causage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'PhenoAge RAA', 'phenoage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Horvathv2 RAA', 'horvath_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Hannum RAA', 'hannum_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Lin RAA', 'lin_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'DNAmGrimAgev2 RAA', 'grimage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_VSP', 'CausAge IRAA', 'causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'PhenoAge IRAA', 'phenoage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'Horvathv2 IRAA', 'horvath_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'Hannum IRAA', 'hannum_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'Lin IRAA', 'lin_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'CausAge IRAA', 'causage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'PhenoAge IRAA', 'phenoage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Horvathv2 IRAA', 'horvath_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Hannum IRAA', 'hannum_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'Lin IRAA', 'lin_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'DNAmGrimAgev2 IRAA', 'grimage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_VSP', 'TL_CausAge_mtcn', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TL_CausAge_mtcn', 'causage_bl*months + z_tl_bl*months + z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'mtcnxCausAge', 'z_mtcn*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxmtcn', 'z_tl_bl*z_mtcn*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_VSP', 'TL_CausAge AAA', 'causeage_aaa_bl*months + z_tl_bl*months ', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'TL_CausAge RAA', 'causage_raa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'TL_CausAge IRAA', 'causage_iraa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TL_CausAge AAA', 'causeage_aaa_bl*months + z_tl_bl*months ', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TL_CausAge RAA', 'causage_raa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TL_CausAge IRAA', 'causage_iraa_bl*months + z_tl_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
-  'PHC_VSP', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
-  'PHC_VSP', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*months', 'months + age_bl + sex + educ + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxCausAge', 'z_tl_bl*causage_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxCausAge AAA', 'z_tl_bl*causeage_aaa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxCausAge RAA', 'z_tl_bl*causage_raa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
+  'PHC_VSP', 'TLxCausAge IRAA', 'z_tl_bl*causage_iraa_bl*months', 'months + age_bl + sex + educ_cat + apoe*months + cdrsb_bl', '(months | RID)',
 
 ) %>%
   mutate(eq = glue('{outcome} ~ {predictors} + {covariates} + {random}'),
@@ -2207,3 +2258,92 @@ ggsave(glue("results/plots/lmm_PersonTime_{DATE}.png"), plot = final_plot, width
 
 ```
 
+```{r}
+
+lm(mtcn ~ TL_BP_ADJ + CausAge + age_bl + sex + cdrsb_bl + apoe + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl, data = cog.df) %>% summary()
+lm(TL_BP_ADJ  ~ CausAge + age_bl + sex + cdrsb_bl + apoe + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl, data = cog.df) %>% summary()
+
+
+test <- lm(mtcn ~ TL_BP_ADJ * PHC_AB42 + CausAge + age + sex + cdrsb + apoe + nk_cell + b_cell + cd4_t_cell + cd8_t_cell + monocyte, data = flbm.df)
+
+test %>% summary()
+
+plot_model(test, type = "pred", terms = c("TL_BP_ADJ", "PHC_AB42"))
+
+
+fitlmer.04b <- lmer(glue("gbl_cog ~ z_tl_bl*z_mtcn_bl*months_c + months_c + age_bl*months_c + sex + educ + cdrsb_bl*months_c  + apoe*months_c + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl + (months_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni %>% filter(cdrsb_bl >= 0.05))
+summary(fitlmer.04b)
+```
+
+```{r}
+
+
+# ────────────────────────────────────────────────────────────────
+# 1.  PREP: (re-)fit the model if needed and centre variables
+# ────────────────────────────────────────────────────────────────
+library(dplyr)
+library(ggplot2)
+
+mri.df <- mri.df %>% 
+  mutate(across(c(mtcn_bl, causage_bl, tl_bl),  # centre for interpretability
+                ~ scale(.x, center = TRUE, scale = FALSE)[,1]))
+
+fit <- gmvol_mtcnxdnamxtl.res  # already fitted in your workspace
+
+# ────────────────────────────────────────────────────────────────
+# 2.  MAKE A NEWDATA GRID OF THE THREE BIOMARKERS
+#     • mtcn_bl: sequence across its range
+#     • causage_bl: pick −1 SD, mean, +1 SD (≈ low/med/high)
+#     • tl_bl:      tertiles (low/med/high) for faceting
+# ────────────────────────────────────────────────────────────────
+grid <- expand.grid(
+  mtcn_bl     = seq(from = min(mri.df$mtcn_bl, na.rm = T),
+                    to   = max(mri.df$mtcn_bl, na.rm = T),
+                    length.out = 100),
+  causage_bl  = c(-1, 0, 1),           # SD-units because centred
+  tl_bl       = quantile(mri.df$tl_bl, # tertile cut-points
+                         probs = c(.16, .50, .84))
+)
+
+# keep the other covariates at *typical* values
+covars <- mri.df %>% 
+  summarise(across(-c(mtcn_bl, causage_bl, tl_bl, gm_vol),
+                   ~ if(is.numeric(.x)) mean(.x, na.rm = TRUE) else Mode(.x)))
+
+grid <- cbind(grid, covars[rep(1, nrow(grid)), ])
+
+# ────────────────────────────────────────────────────────────────
+# 3.  GET PREDICTED GM VOLUME & CONF. BANDS
+# ────────────────────────────────────────────────────────────────
+pred <- predict(fit, newdata = grid, interval = "confidence")
+grid  <- cbind(grid, as.data.frame(pred))
+
+# ────────────────────────────────────────────────────────────────
+# 4.  PLOT
+# ────────────────────────────────────────────────────────────────
+# human-readable labels
+grid <- grid %>% 
+  mutate(causage_lbl = factor(causage_bl,
+                              levels = c(-1, 0, 1),
+                              labels = c("−1 SD (younger)", "Mean", "+1 SD (older)")),
+         tl_lbl      = factor(tl_bl,
+                              labels = c("Short TL (low tertile)",
+                                         "Average TL (mid tertile)",
+                                         "Long TL (high tertile)")))
+
+ggplot(grid, aes(x = mtcn_bl, y = fit,
+                 colour = causage_lbl, fill = causage_lbl)) +
+  geom_ribbon(aes(ymin = lwr, ymax = upr),
+              alpha = 0.15, colour = NA) +
+  geom_line(size = 1) +
+  facet_wrap(~ tl_lbl, nrow = 1) +
+  labs(x = "Baseline mtDNA Copy Number (centred)",
+       y = "Predicted Gray-Matter Volume (mm³)",
+       colour = "Epigenetic age slice",
+       fill   = "Epigenetic age slice",
+       title  = "Three-way interaction: mtDNAcn × DNAm age × Telomere length") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+```

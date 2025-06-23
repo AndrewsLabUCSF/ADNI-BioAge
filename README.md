@@ -2,7 +2,7 @@
 
 ## Predictors
 ### DNAm 
-A total of 649 ADNI participants hadmethylation data. Participants varied on the number of repeatDNA methylation measurements they had: 83 had only abaseline measurement; 121 had 2 measurements (baseline plus 1repeat), mean 14.5 months between measurements (SD = 7.06);407 had 3 measurements, mean 12.1 months between mea-surements (SD = 1.5); 29 had 4, mean 10.4 months betweenmeasurements (SD = 3.54); and 9 had 5, mean 12.5 monthsbetween measurements (SD = 2.25). [Sugden et al 2022](https://www.neurology.org/doi/10.1212/WNL.0000000000200898)
+A total of 649 ADNI participants had methylation data. Participants varied on the number of repeat DNA methylation measurements they had: 83 had only a baseline measurement; 121 had 2 measurements (baseline plus 1repeat), mean 14.5 months between measurements (SD = 7.06);407 had 3 measurements, mean 12.1 months between mea-surements (SD = 1.5); 29 had 4, mean 10.4 months betweenmeasurements (SD = 3.54); and 9 had 5, mean 12.5 monthsbetween measurements (SD = 2.25). [Sugden et al 2022](https://www.neurology.org/doi/10.1212/WNL.0000000000200898)
 
 
 #### Epigenetic Clocks
@@ -49,3 +49,11 @@ Mosdepth was used to count base coverage of both autosomal DNA and mtDNA, with m
 ### Cognitive function 
 
 Co-calibrated cogntive domain scores [Mukherjee et al. Neuropsychology. 2023 May;37(4):409-423](https://pubmed.ncbi.nlm.nih.gov/35925737/)
+
+### Fluid Biomarkers 
+
+Here, we implemented this approach using 23 cohorts with CSFAβ42, Tau and pTau level and calculated their Z-scores (SupplementaryTable 1). Prior to Z-score calculation, quality control (QC) was done toremove duplicated samples or samples with missing biomarker level.Raw protein values were log transformed followed by outlier removal.Outliers were defined using the Interquartile range (IQR) approach. Anybiomarker level lower than Q1-1.5*IQR and higher than Q3 + 1.5*IQR,where Q1 and Q3 are the first and the third quartile calculated from thedistribution, were marked as outlier data points and excluded from theanalysis. Outlier detection and removal is a highly recommended step inbiomarker-based analysis to exclude technical (e.g., ceiling values) andbiological artifacts (e.g., cell lysis) within the dataset to produce robustfindings. Z-scores were then calculated using base “scale” function in Rstatistical software (v3.5.0). The QC steps as well as Z-score calculationwere performed for each cohort and each biomarker individually. [Timsina et al. Neurobiol. Dis. 190, 106373 (2024)](https://pubmed.ncbi.nlm.nih.gov/38072165/)
+
+### Structrual MRI 
+
+
