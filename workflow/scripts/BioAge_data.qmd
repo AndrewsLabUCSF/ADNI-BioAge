@@ -63,82 +63,60 @@ mri <- mri.raw %>%
   select(RID, SUBJID, PHASE, VISCODE, VISCODE2, SCANDATE, PHC_Visit, PHC_Age_T1,PHC_ScannerBatchName, PHC_LONIUID, PHC_ScanID,
     PHC_ScannerBatchName.1, PHC_ScannerManufacturer, PHC_FieldSgth, EstimatedTotalIntraCranialVol_combat, 
     rh_entorhinal_thickness_combat, lh_entorhinal_thickness_combat,
-    rh_fusiform_thickness_combat, rh_fusiform_thickness_combat,
+    rh_entorhinal_volume_combat, lh_entorhinal_volume_combat,
     rh_inferiortemporal_thickness_combat, lh_inferiortemporal_thickness_combat,
+    rh_inferiortemporal_volume_combat, lh_inferiortemporal_volume_combat,
     rh_middletemporal_thickness_combat, lh_middletemporal_thickness_combat,
+    rh_middletemporal_volume_combat, lh_middletemporal_volume_combat,
+    rh_fusiform_thickness_combat, lh_fusiform_thickness_combat,
+    lh_fusiform_volume_combat, rh_fusiform_volume_combat, 
     rh_inferiorparietal_thickness_combat, lh_inferiorparietal_thickness_combat,
+    lh_inferiorparietal_volume_combat, rh_inferiorparietal_volume_combat,
     rh_precuneus_thickness_combat, lh_precuneus_thickness_combat, 
+    lh_precuneus_volume_combat, rh_precuneus_volume_combat,
     Right.Hippocampus_combat, Left.Hippocampus_combat,
     Right.Amygdala_combat, Left.Amygdala_combat,
-    rh_entorhinal_volume_combat, lh_entorhinal_volume_combat,
-    rh_middletemporal_volume_combat, lh_middletemporal_volume_combat,
-    rh_inferiortemporal_volume_combat, lh_inferiortemporal_volume_combat,
     rh_temporalpole_volume_combat, lh_temporalpole_volume_combat,
  ) %>%
   mutate(
+    icv = EstimatedTotalIntraCranialVol_combat,
     ## Cortical Thickness
     ent_thk = rowMeans(across(c(rh_entorhinal_thickness_combat, lh_entorhinal_thickness_combat)), na.rm = FALSE),
-    fus_thk = rowMeans(across(c(rh_fusiform_thickness_combat, rh_fusiform_thickness_combat)), na.rm = FALSE),
+    fus_thk = rowMeans(across(c(rh_fusiform_thickness_combat, lh_fusiform_thickness_combat)), na.rm = FALSE),
     ift_thk = rowMeans(across(c(rh_inferiortemporal_thickness_combat, lh_inferiortemporal_thickness_combat)), na.rm = FALSE),
     mt_thk = rowMeans(across(c(rh_middletemporal_thickness_combat, lh_middletemporal_thickness_combat)), na.rm = FALSE),
     ifp_thk = rowMeans(across(c(rh_inferiorparietal_thickness_combat, lh_inferiorparietal_thickness_combat)), na.rm = FALSE),
     pcun_thk = rowMeans(across(c(rh_precuneus_thickness_combat, lh_precuneus_thickness_combat)), na.rm = FALSE),
     cort_thk = rowMeans(across(c(ent_thk, fus_thk, ift_thk, mt_thk, ifp_thk, pcun_thk)), na.rm = FALSE),
     ## GM Volume
+    ent_vol = rowMeans(across(c(rh_entorhinal_volume_combat, lh_entorhinal_volume_combat)), na.rm = FALSE),
+    ift_vol = rowMeans(across(c(rh_inferiortemporal_volume_combat, lh_inferiortemporal_volume_combat)), na.rm = FALSE),
+    mt_vol = rowMeans(across(c(rh_middletemporal_volume_combat, lh_middletemporal_volume_combat)), na.rm = FALSE),
     hipp_vol = rowMeans(across(c(Right.Hippocampus_combat, Left.Hippocampus_combat)), na.rm = FALSE),
     amyg_vol = rowMeans(across(c(Right.Amygdala_combat, Left.Amygdala_combat)), na.rm = FALSE),
-    ent_vol = rowMeans(across(c(rh_entorhinal_volume_combat, lh_entorhinal_volume_combat)), na.rm = FALSE),
-    mt_vol = rowMeans(across(c(rh_middletemporal_volume_combat, lh_middletemporal_volume_combat)), na.rm = FALSE),
-    ift_vol = rowMeans(across(c(rh_inferiortemporal_volume_combat, lh_inferiortemporal_volume_combat)), na.rm = FALSE),
     tpol_vol = rowMeans(across(c(rh_temporalpole_volume_combat, lh_temporalpole_volume_combat)), na.rm = FALSE),
     gm_vol = rowSums(across(c(hipp_vol, amyg_vol, ent_vol, mt_vol, ift_vol, tpol_vol)), na.rm = FALSE),
+    ## Weighted average of cortical thickness 
+    ent_tot_vol = (lh_entorhinal_volume_combat     + rh_entorhinal_volume_combat    ) / icv,
+    fus_tot_vol = (lh_fusiform_volume_combat       + rh_fusiform_volume_combat      ) / icv,
+    ift_tot_vol = (lh_inferiortemporal_volume_combat + rh_inferiortemporal_volume_combat) / icv,
+    mt_tot_vol  = (lh_middletemporal_volume_combat   + rh_middletemporal_volume_combat  ) / icv,
+    ifp_tot_vol = (lh_inferiorparietal_volume_combat + rh_inferiorparietal_volume_combat) / icv,
+    pcun_tot_vol= (lh_precuneus_volume_combat        + rh_precuneus_volume_combat       ) / icv,
+
+    cort_thk_volwt =
+      (ent_tot_vol  * ent_thk  +
+       fus_tot_vol  * fus_thk  +
+       ift_tot_vol  * ift_thk  +
+       mt_tot_vol   * mt_thk   +
+       ifp_tot_vol  * ifp_thk  +
+       pcun_tot_vol * pcun_thk) /
+      (ent_tot_vol + fus_tot_vol + ift_tot_vol + mt_tot_vol + ifp_tot_vol + pcun_tot_vol),
   )
  
-
- mri <- mri.raw %>%
-  select(...,
-         # add bilateral surface-area columns
-         rh_entorhinal_area,  lh_entorhinal_area,
-         rh_fusiform_area,     lh_fusiform_area,
-         rh_inferiortemporal_area, lh_inferiortemporal_area,
-         rh_middletemporal_area,   lh_middletemporal_area,
-         rh_inferiorparietal_area,  lh_inferiorparietal_area,
-         rh_precuneus_area,         lh_precuneus_area) %>%
-  mutate(
-    ## 1. Left–right averaged thickness (same as before)
-    ent_thk  = rowMeans(cbind(rh_entorhinal_thickness_combat,
-                              lh_entorhinal_thickness_combat)),
-    fus_thk  = rowMeans(cbind(rh_fusiform_thickness_combat,
-                              lh_fusiform_thickness_combat)),
-    ift_thk  = rowMeans(cbind(rh_inferiortemporal_thickness_combat,
-                              lh_inferiortemporal_thickness_combat)),
-    mt_thk   = rowMeans(cbind(rh_middletemporal_thickness_combat,
-                              lh_middletemporal_thickness_combat)),
-    ifp_thk  = rowMeans(cbind(rh_inferiorparietal_thickness_combat,
-                              lh_inferiorparietal_thickness_combat)),
-    pcun_thk = rowMeans(cbind(rh_precuneus_thickness_combat,
-                              lh_precuneus_thickness_combat)),
-
-    ## 2. Left–right summed surface areas
-    ent_area  = rh_entorhinal_area  + lh_entorhinal_area,
-    fus_area  = rh_fusiform_area    + lh_fusiform_area,
-    ift_area  = rh_inferiortemporal_area + lh_inferiortemporal_area,
-    mt_area   = rh_middletemporal_area   + lh_middletemporal_area,
-    ifp_area  = rh_inferiorparietal_area  + lh_inferiorparietal_area,
-    pcun_area = rh_precuneus_area         + lh_precuneus_area,
-
-    ## 3. Surface-area–weighted meta-ROI thickness
-    cort_thk = (
-        ent_area  * ent_thk  +
-        fus_area  * fus_thk  +
-        ift_area  * ift_thk  +
-        mt_area   * mt_thk   +
-        ifp_area  * ifp_thk  +
-        pcun_area * pcun_thk
-      ) /
-      (ent_area + fus_area + ift_area + mt_area + ifp_area + pcun_area)
-  )
-
+mri %>%
+  select(RID, cort_thk, cort_thk_volwt, gm_vol)
+ 
 ```
 
 ### Methylation
@@ -315,7 +293,7 @@ fbm.merge <- fluid_bm.raw %>%
 mri.merge <- mri %>% 
   arrange(RID, PHC_Visit) %>%
   distinct(RID, PHC_Visit, .keep_all = TRUE) %>%
-  select(RID, PHC_Visit, PHC_ScannerBatchName.1, PHC_ScannerManufacturer, PHC_FieldSgth, EstimatedTotalIntraCranialVol_combat, cort_thk, gm_vol)
+  select(RID, PHC_Visit, PHC_ScannerBatchName.1, PHC_ScannerManufacturer, PHC_FieldSgth, EstimatedTotalIntraCranialVol_combat, cort_thk, cort_thk_volwt,  gm_vol)
 
 ```
 
@@ -496,8 +474,6 @@ genetics.merge <- genetics %>%
 ```{r}
 
 ## Might need to filter this to omics bl
-mean_age <- filter(cog.merge, PHC_Visit == 1) %>% summarise(age = mean(PHC_Age_Cognition, na.rm = T)) %>% pull(age)
-mean_visits = filter(cog.merge, PHC_Visit == 1) %>% summarise(age = mean(PHC_Age_Cognition, na.rm = T)) %>% pull(age)
 
 adni <- cog.merge %>%
   left_join(select(merge.raw, RID, EXAMDATE, ORIGPROT, CDRSB), by = c("RID", 'EXAMDATE')) %>%
@@ -507,7 +483,6 @@ adni <- cog.merge %>%
   # left_join(dx_bl, by = c("RID")) %>%
   left_join(select(genetics.merge, -PHC_Age_Cognition, -PHC_Visit), by = c("RID", 'EXAMDATE')) %>%
   mutate(
-    age_c = PHC_Age_Cognition - mean_age, 
     sex = ifelse(PHC_Sex == 1, "Male", "Female"), 
     gbl_cog = rowMeans(across(c(PHC_MEM, PHC_EXF, PHC_LAN, PHC_VSP)), na.rm = TRUE),
     race = case_when(
@@ -531,7 +506,7 @@ adni <- cog.merge %>%
   mutate( # Months from baseline genetics visit
     baseline_date = min(EXAMDATE, na.rm = TRUE),  # Get earliest EXAMDATE per RID (baseline)
     months_since_bl = as.numeric(difftime(EXAMDATE, baseline_date, units = "days")) / 30.4375,  # Convert days to months
-    age_bl = min(PHC_Age_Cognition, na.rm = TRUE),
+    age_bl = min(PHC_Age_Cognition, na.rm = TRUE), 
     visit_bl = first(PHC_Visit), 
   ) %>%
   mutate(
@@ -566,20 +541,31 @@ adni <- cog.merge %>%
   relocate(dx_bl, .after = PHC_Diagnosis)  %>%
   relocate(visit_bl, .after = PHC_Visit) 
 
-## Center time variable
+## Scale time variables
+
+mean_age <- adni %>% group_by(RID) %>% slice_min(PHC_Visit) %>% ungroup() %>% summarise(age = mean(PHC_Age_Cognition, na.rm = T)) %>% pull(age)
+sd_age <- adni %>% group_by(RID) %>% slice_min(PHC_Visit) %>% ungroup() %>% summarise(age = sd(PHC_Age_Cognition, na.rm = T)) %>% pull(age)
+
 mean_months <- mean(adni$months, na.rm = TRUE)
+
 adni <- adni %>% 
   mutate(
-    months_c = months - mean_months
+    months_c = months - mean_months, 
+    yrs_c = (months - mean_months) / 12,
+    z_age_bl = (age_bl - mean_age) / sd_age,
+    age_c = PHC_Age_Cognition - mean_age, 
   ) %>% 
-    relocate(months_c, .after = months)
+    relocate(months_c, .after = months) %>% 
+    relocate(yrs_c, .after = months_c) %>% 
+    relocate(z_age_bl, .after = age_bl) %>% 
+    relocate(age_c, .after = z_age_bl)
 
 ```
 
 ### NeuroImaging 
 ```{r}
 mri.df <- adni %>%
-  select(RID, cohort, VISCODE2, EXAMDATE, PHC_Visit, visit_bl, months, PHC_Sex, PHC_Age_Cognition, age_bl, cdrsb_bl, educ, educ_cat, apoe, mtcn_bl, neutrophil_bl, nk_cell_bl,  b_cell_bl, cd4_t_cell_bl, cd8_t_cell_bl, monocyte_bl, smk, causage_bl, tl_bl, PHC_ScannerBatchName.1, PHC_ScannerManufacturer, PHC_FieldSgth, EstimatedTotalIntraCranialVol_combat, cort_thk, gm_vol) %>%
+  select(RID, cohort, VISCODE2, EXAMDATE, PHC_Visit, visit_bl, months, PHC_Sex, PHC_Age_Cognition, age_bl, cdrsb_bl, educ, educ_cat, apoe, z_mtcn_bl, z_dnam_bl, z_tl_bl, mtcn_bl, neutrophil_bl, nk_cell_bl,  b_cell_bl, cd4_t_cell_bl, cd8_t_cell_bl, monocyte_bl, smk, causage_bl, tl_bl, PHC_ScannerBatchName.1, PHC_ScannerManufacturer, PHC_FieldSgth, EstimatedTotalIntraCranialVol_combat, cort_thk, cort_thk_volwt, gm_vol) %>%
   group_by(RID) %>%
   filter(!all(is.na(EstimatedTotalIntraCranialVol_combat))) %>%
   filter(!is.na(EstimatedTotalIntraCranialVol_combat)) %>%
@@ -588,7 +574,11 @@ mri.df <- adni %>%
   filter(visit_bl != PHC_Visit) %>%
   rename(sex = PHC_Sex, age = PHC_Age_Cognition) %>%
   mutate(
-    PHC_FieldSgth = as.factor(PHC_FieldSgth)
+    PHC_FieldSgth = as.factor(PHC_FieldSgth), 
+    z_tl_bl = scale(tl_bl)[,1], 
+    z_mtcn_bl = scale(mtcn_bl)[,1],
+    z_dnam_bl = scale(causage_bl)[,1], 
+
   )
 ```
 
@@ -596,13 +586,17 @@ mri.df <- adni %>%
 ```{r}
 
 flbm.df <- adni %>%
-  select(RID, cohort, VISCODE2, EXAMDATE, PHC_Visit, PHC_Sex, PHC_Age_Cognition, CDRSB, educ, educ_cat, apoe, smk, DRAWDATE, Platform, PHC_AB42, PHC_Tau, PHC_pTau, AT_class, mtcn, CausAge, TL_BP_ADJ, neutrophil, nk_cell,  b_cell, cd4_t_cell, cd8_t_cell, monocyte) %>% 
+  select(RID, cohort, VISCODE2, EXAMDATE, PHC_Visit, PHC_Sex, PHC_Age_Cognition, CDRSB, educ, educ_cat, apoe, smk, DRAWDATE, Platform, PHC_AB42, PHC_Tau, PHC_pTau, AT_class, mtcn, CausAge, TL_BP_ADJ, z_mtcn_bl, z_dnam_bl, z_tl_bl, neutrophil, nk_cell,  b_cell, cd4_t_cell, cd8_t_cell, monocyte) %>% 
   group_by(RID) %>%
   filter(!all(is.na(AT_class))) %>% 
   # ungroup() %>% select(RID, PHC_Visit, PHC_AB42, PHC_Tau, PHC_pTau, AT_class, mtcn, CausAge, TL_BP_ADJ) %>% View()
   mutate(
     # mtcn = ifelse(PHC_Visit > min(PHC_Visit), NA, mtcn)
-    time_dif = EXAMDATE - DRAWDATE
+    time_dif = EXAMDATE - DRAWDATE, 
+    z_tl = scale(TL_BP_ADJ)[,1], 
+    z_mtcn = scale(mtcn)[,1],
+    z_dnam = scale(CausAge)[,1], 
+
   ) %>%
   ungroup() %>%
   filter(!is.na(AT_class)) %>%
@@ -614,9 +608,9 @@ flbm.df %>% select(RID, EXAMDATE, DRAWDATE, time_dif) %>% mutate(dif = abs(time_
 
 ## Export
 ```{r}
-write_csv(adni, 'intermediate/adni.csv')
-write_csv(mri.df, 'intermediate/mri.csv')
-write_csv(flbm.df, 'intermediate/flbm.csv')
+write_csv(adni, glue('intermediate/adni_{DATE}.csv'))
+write_csv(mri.df, glue('intermediate/adni_{DATE}.csv'))
+write_csv(flbm.df, glue('intermediate/adni_{DATE}.csv'))
 
 ```
 
@@ -673,7 +667,7 @@ adni_d <- adni %>%
    ),
    dx = fct_relevel(dx, "CN", "MCI", "AD")
   ) %>%
-  left_join(select(mri.df, RID, cort_thk, gm_vol)) %>%
+  left_join(select(mri.df, RID, cort_thk, cort_thk_volwt, gm_vol)) %>%
   left_join(select(flbm.df, RID, PHC_AB42, PHC_Tau, PHC_pTau))
 
 describe_distribution(adni_d)
@@ -751,7 +745,7 @@ res_cor <- adni_d %>%
     # BioAge
     age, TL, mtDNAcn, CausAge, PhenoAge, Horvathv2, Hannum, Lin, DNAmGrimAgev2, AgeAccelGrimv2, DunedinPACE, 
     # AD Endophenotypes
-    gbl_cog, cort_thk, gm_vol, PHC_AB42, PHC_Tau, PHC_pTau
+    gbl_cog, cort_thk_volwt, gm_vol, PHC_AB42, PHC_Tau, PHC_pTau
     ) %>%
   correlation(
     p_adjust = 'fdr'
@@ -776,9 +770,9 @@ res_cor <- adni_d %>%
     # BioAge
     age, TL, mtDNAcn, CausAge,  
     # AD Endophenotypes
-    gbl_cog, cort_thk, gm_vol, PHC_AB42, PHC_Tau, PHC_pTau
+    gbl_cog, cort_thk_volwt, gm_vol, PHC_AB42, PHC_Tau, PHC_pTau
     ) %>%
-  rename(Age = age, `Global Cog.` = gbl_cog, `Cort. Thick.` = cort_thk, `GM Vol.` = gm_vol, AB42 = PHC_AB42, Tau = PHC_Tau, pTau = PHC_pTau) %>%
+  rename(Age = age, `Global Cog.` = gbl_cog, `Cort. Thick.` = cort_thk_volwt, `GM Vol.` = gm_vol, AB42 = PHC_AB42, Tau = PHC_Tau, pTau = PHC_pTau) %>%
   correlation(
     p_adjust = 'fdr'
   )
