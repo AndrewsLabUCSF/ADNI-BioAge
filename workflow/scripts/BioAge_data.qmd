@@ -97,21 +97,18 @@ mri <- mri.raw %>%
     tpol_vol = rowMeans(across(c(rh_temporalpole_volume_combat, lh_temporalpole_volume_combat)), na.rm = FALSE),
     gm_vol = rowSums(across(c(hipp_vol, amyg_vol, ent_vol, mt_vol, ift_vol, tpol_vol)), na.rm = FALSE),
     ## Weighted average of cortical thickness 
-    ent_tot_vol = (lh_entorhinal_volume_combat     + rh_entorhinal_volume_combat    ) / icv,
-    fus_tot_vol = (lh_fusiform_volume_combat       + rh_fusiform_volume_combat      ) / icv,
-    ift_tot_vol = (lh_inferiortemporal_volume_combat + rh_inferiortemporal_volume_combat) / icv,
-    mt_tot_vol  = (lh_middletemporal_volume_combat   + rh_middletemporal_volume_combat  ) / icv,
-    ifp_tot_vol = (lh_inferiorparietal_volume_combat + rh_inferiorparietal_volume_combat) / icv,
-    pcun_tot_vol= (lh_precuneus_volume_combat        + rh_precuneus_volume_combat       ) / icv,
+    fus_vol = rowMeans(across(c(lh_fusiform_volume_combat, rh_fusiform_volume_combat)), na.rm = FALSE),
+    ifp_vol = rowMeans(across(c(lh_inferiorparietal_volume_combat, rh_inferiorparietal_volume_combat)), na.rm = FALSE),
+    pcun_vol = rowMeans(across(c(lh_precuneus_volume_combat, rh_precuneus_volume_combat)), na.rm = FALSE),
 
     cort_thk_volwt =
-      (ent_tot_vol  * ent_thk  +
-       fus_tot_vol  * fus_thk  +
-       ift_tot_vol  * ift_thk  +
-       mt_tot_vol   * mt_thk   +
-       ifp_tot_vol  * ifp_thk  +
-       pcun_tot_vol * pcun_thk) /
-      (ent_tot_vol + fus_tot_vol + ift_tot_vol + mt_tot_vol + ifp_tot_vol + pcun_tot_vol),
+      (ent_vol  * ent_thk  +
+       fus_vol  * fus_thk  +
+       ift_vol  * ift_thk  +
+       mt_vol   * mt_thk   +
+       ifp_vol  * ifp_thk  +
+       pcun_vol * pcun_thk) /
+      (ent_vol + fus_vol + ift_vol + mt_vol + ifp_vol + pcun_vol),
   )
  
 mri %>%
@@ -414,6 +411,13 @@ genetics_bl <- epi_age_acc %>%
    z_tl_bl = scale(tl_bl)[,1], 
    z_mtcn_bl = scale(mtcn_bl)[,1],
    z_dnam_bl = scale(causage_bl)[,1], 
+   # cat_tl_bl = ntile(z_tl_bl, 3),
+   # cat_mtcn_bl = ntile(z_mtcn_bl, 3),
+   # cat_dnam_bl = ntile(z_dnam_bl, 3),
+   cat_tl_bl = ifelse(z_tl_bl < -1, 1, 0),
+   cat_mtcn_bl = ifelse(z_mtcn_bl < -1, 1, 0),
+   cat_dnam_bl = ifelse(z_dnam_bl > 1, 1, 0),
+   bioage_bl = rowSums(across(c(cat_tl_bl, cat_mtcn_bl, cat_dnam_bl)), na.rm = TRUE),
   ) %>%
     select(RID, EXAMDATE, contains('bl'))
 
@@ -463,6 +467,7 @@ genetics.merge <- genetics %>%
   fill(z_tl_bl, .direction = "down") %>%
   fill(z_mtcn_bl, .direction = "down") %>%
   fill(z_dnam_bl, .direction = "down") %>%
+  fill(bioage_bl, .direction = "down") %>%
   fill(apoe, .direction = "updown") %>%
   fill(apoe, .direction = "down") %>%
   ungroup()
@@ -565,7 +570,7 @@ adni <- adni %>%
 ### NeuroImaging 
 ```{r}
 mri.df <- adni %>%
-  select(RID, cohort, VISCODE2, EXAMDATE, PHC_Visit, visit_bl, months, PHC_Sex, PHC_Age_Cognition, age_bl, cdrsb_bl, educ, educ_cat, apoe, z_mtcn_bl, z_dnam_bl, z_tl_bl, mtcn_bl, neutrophil_bl, nk_cell_bl,  b_cell_bl, cd4_t_cell_bl, cd8_t_cell_bl, monocyte_bl, smk, causage_bl, tl_bl, PHC_ScannerBatchName.1, PHC_ScannerManufacturer, PHC_FieldSgth, EstimatedTotalIntraCranialVol_combat, cort_thk, cort_thk_volwt, gm_vol) %>%
+  select(RID, cohort, VISCODE2, EXAMDATE, PHC_Visit, visit_bl, months, PHC_Sex, PHC_Age_Cognition, age_bl, cdrsb_bl, dx_bl, educ, educ_cat, apoe, z_mtcn_bl, z_dnam_bl, z_tl_bl, mtcn_bl, bioage_bl, neutrophil_bl, nk_cell_bl,  b_cell_bl, cd4_t_cell_bl, cd8_t_cell_bl, monocyte_bl, smk, causage_bl, tl_bl, PHC_ScannerBatchName.1, PHC_ScannerManufacturer, PHC_FieldSgth, EstimatedTotalIntraCranialVol_combat, cort_thk, cort_thk_volwt, gm_vol) %>%
   group_by(RID) %>%
   filter(!all(is.na(EstimatedTotalIntraCranialVol_combat))) %>%
   filter(!is.na(EstimatedTotalIntraCranialVol_combat)) %>%
@@ -578,15 +583,15 @@ mri.df <- adni %>%
     z_tl_bl = scale(tl_bl)[,1], 
     z_mtcn_bl = scale(mtcn_bl)[,1],
     z_dnam_bl = scale(causage_bl)[,1], 
-
   )
+
 ```
 
 ### Fluid Biomarkers
 ```{r}
 
 flbm.df <- adni %>%
-  select(RID, cohort, VISCODE2, EXAMDATE, PHC_Visit, PHC_Sex, PHC_Age_Cognition, CDRSB, educ, educ_cat, apoe, smk, DRAWDATE, Platform, PHC_AB42, PHC_Tau, PHC_pTau, AT_class, mtcn, CausAge, TL_BP_ADJ, z_mtcn_bl, z_dnam_bl, z_tl_bl, neutrophil, nk_cell,  b_cell, cd4_t_cell, cd8_t_cell, monocyte) %>% 
+  select(RID, cohort, VISCODE2, EXAMDATE, PHC_Visit, PHC_Sex, PHC_Age_Cognition, CDRSB, dx_bl, educ, educ_cat, apoe, smk, DRAWDATE, Platform, PHC_AB42, PHC_Tau, PHC_pTau, AT_class, mtcn, CausAge, TL_BP_ADJ, z_mtcn_bl, z_dnam_bl, z_tl_bl, bioage_bl, neutrophil, nk_cell,  b_cell, cd4_t_cell, cd8_t_cell, monocyte) %>% 
   group_by(RID) %>%
   filter(!all(is.na(AT_class))) %>% 
   # ungroup() %>% select(RID, PHC_Visit, PHC_AB42, PHC_Tau, PHC_pTau, AT_class, mtcn, CausAge, TL_BP_ADJ) %>% View()

@@ -1,0 +1,1368 @@
+---
+title: "TL_DNAm_data"
+format: html
+editor: source
+editor_options: 
+  chunk_output_type: console
+---
+## Import
+
+```{r}
+library(tidyverse)
+library(easystats)
+library(broom)
+library(glue)
+library(plotgardener)
+library(lme4)
+library(lmerTest)
+library(sjPlot)
+library(gtools)
+setwd("~/gitcode/DNAm")
+`%nin%` = negate(`%in%`) 
+DATE = '20250707'
+# DATE = ymd(Sys.Date()) %>% str_replace_all("-", "")
+
+## Extract tidy results and standardized coefficents
+get_std_res <- function(model) {
+    std_res <- standardize_parameters(model, method = "refit") %>% as_tibble()
+
+    if (inherits(model, "merMod")) {
+        res <- broom.mixed::tidy(model, effects = "fixed") 
+     } else {                                  # anything that is not merMod
+        res <- broom::tidy(model, conf.int = T) 
+    }
+
+    return(left_join(res, std_res, by = c('term' = 'Parameter')))
+}
+
+```
+
+```{r}
+## Import 
+#| include: false 
+
+adni <- read_csv('intermediate/adni.csv') %>%
+  mutate(
+    apoe = fct_relevel(apoe, "e3/e3"), 
+    educ_cat = fct_relevel(educ_cat, 'HighSchool')
+  )
+
+cog.df <- adni %>% 
+  group_by(RID) %>%
+  slice_min(PHC_Visit) %>%
+  ungroup()
+
+mri.df <- read_csv('intermediate/mri.csv') %>%
+  mutate(
+    apoe = fct_relevel(apoe, "e3/e3"), 
+    educ_cat = fct_relevel(educ_cat, 'HighSchool')
+  )
+
+flbm.df <- read_csv('intermediate/flbm.csv') %>%
+  mutate(
+    apoe = fct_relevel(apoe, "e3/e3"), 
+    educ_cat = fct_relevel(educ_cat, 'HighSchool')
+  )
+
+adni %>% 
+  select(RID, gbl_cog, yrs_c, nk_cell, z_dnam_bl)
+```
+
+## Analysis
+### Global Cognition 
+#### Baseline Models
+```{r}
+fitlmer.00 <- lmer(gbl_cog ~ yrs_c + (yrs_c  | RID), REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead", optCtrl = list(maxfun = 200000)), data = adni)
+summary(fitlmer.00)
+
+cog_bl_cov <- "yrs_c + z_age_bl + sex + educ + apoe + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+
+fitlmer.01 <- lmer(as.formula(glue("gbl_cog ~ {cog_bl_cov} + (yrs_c  | RID)")), 
+                  REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.01)
+
+fitlmer.02a <- lmer(as.formula(glue("gbl_cog ~ z_tl_bl + {cog_bl_cov} + (yrs_c  | RID)")), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.02a) 
+
+fitlmer.02b <- lmer(as.formula(glue("gbl_cog ~ z_dnam_bl + {cog_bl_cov} + (yrs_c  | RID)")), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.02b)
+
+fitlmer.02c <- lmer(as.formula(glue("gbl_cog ~ z_mtcn_bl + {cog_bl_cov} + (yrs_c  | RID)")), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.02c)
+```
+
+```{r}
+cog_bllm_cov <- "z_age_bl + sex + educ_cat + apoe + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+
+lm(glue("gbl_cog ~ {cog_bllm_cov}  +  mtcn_bl + causage_bl + tl_bl"), data = cog.df) %>% tidy()
+lm(glue("gbl_cog ~ {cog_bllm_cov}  +  mtcn_bl * causage_bl * tl_bl"), data = cog.df) %>% tidy()
+lm(glue("gbl_cog ~ {cog_bllm_cov}  +  mtcn_bl + causage_bl * tl_bl"), data = cog.df) %>% tidy()
+lm(glue("gbl_cog ~ {cog_bllm_cov}  +  mtcn_bl * causage_bl + tl_bl"), data = cog.df) %>% tidy()
+lm(glue("gbl_cog ~ {cog_bllm_cov}  +  causage_bl + mtcn_bl * tl_bl"), data = cog.df) %>% tidy()
+
+```
+
+#### Longitudinal
+```{r}
+
+cog_lt_cov <- "yrs_c + z_age_bl*yrs_c + sex + educ_cat + apoe*yrs_c + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+
+## Longitudional
+fitlmer.03 <- lmer(glue("gbl_cog ~ {cog_lt_cov} + (yrs_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03)
+
+fitlmer.03a <- lmer(glue("gbl_cog ~ z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03a)
+plot_model(fitlmer.03a, type = "pred", terms = c("yrs_c", "z_tl_bl"))
+
+fitlmer.03b <- lmer(glue("gbl_cog ~ z_dnam_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03b)
+plot_model(fitlmer.03b, type = "pred", terms = c("yrs_c", "z_dnam_bl"))
+
+fitlmer.03c <- lmer(glue("gbl_cog ~ z_mtcn_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03c)
+plot_model(fitlmer.03c, type = "pred", terms = c("yrs_c", "z_mtcn_bl"))
+
+fitlmer.03d <- lmer(glue("gbl_cog ~ z_tl_bl*yrs_c + z_dnam_bl*yrs_c + z_mtcn_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"), REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.03d)
+
+plot_model(fitlmer.03d, type = "pred", terms = c("yrs_c", "z_tl_bl"))
+plot_model(fitlmer.03d, type = "pred", terms = c("yrs_c", "z_dnam_bl"))
+plot_model(fitlmer.03d, type = "pred", terms = c("yrs_c", "z_mtcn_bl"))
+```
+
+```{r}
+
+gbl_cog_bioage.res <- bind_rows(
+  get_std_res(fitlmer.03) %>% mutate(outcome = 'gbl_cog', model = "baseline"),
+  get_std_res(fitlmer.03a) %>% mutate(outcome = 'gbl_cog', model = "TL"),
+  get_std_res(fitlmer.03b) %>% mutate(outcome = 'gbl_cog', model = "CausAge"),
+  get_std_res(fitlmer.03c) %>% mutate(outcome = 'gbl_cog', model = "mtDNAcn"),
+  get_std_res(fitlmer.03d) %>% mutate(outcome = 'gbl_cog', model = "BioAge")
+  ) %>%
+  relocate(outcome, model) %>%
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),
+    sig = stars.pval(p.value),              
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}{sig}")
+  ) 
+  
+gbl_cog_bioage.res  %>% 
+  print(n = Inf)
+
+```
+
+```{r}
+gbl_cog_tl.p <- plot_model(fitlmer.03d, type = "pred", terms = c("yrs_c", "z_tl_bl")) + 
+  labs(
+    x = "Years (Centered)", 
+    y = "Global Cognition", 
+  ) + 
+  guides(color = guide_legend(title = "TL")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8)
+  )
+
+gbl_cog_dnam.p <- plot_model(fitlmer.03d, type = "pred", terms = c("yrs_c", "z_dnam_bl")) + 
+  labs(
+    x = "Years (Centered)", 
+    y = "Global Cognition", 
+  ) + 
+  guides(color = guide_legend(title = "CausAge")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8)
+  )
+
+gbl_cog_mtcn.p <- plot_model(fitlmer.03d, type = "pred", terms = c("yrs_c", "z_mtcn_bl")) + 
+  labs(
+    x = "Years (Centered)", 
+    y = "Global Cognition", 
+  ) + 
+  guides(color = guide_legend(title = "mtDNAcn")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8)
+  )
+
+gbl_cog_bioage.p <- cowplot::plot_grid(gbl_cog_tl.p, gbl_cog_dnam.p, gbl_cog_mtcn.p, nrow = 1, labels = c("A", "B", "C"))
+gbl_cog_bioage.p
+
+ggsave(glue("results/plots/gbl_cog_bioage_nocdr_{DATE}.png"), plot = gbl_cog_bioage.p, width = 9, height = 4, units = 'in')
+
+```
+
+#### Interactions
+```{r}
+
+## Interaction
+
+fitlmer.04a <- lmer(glue("gbl_cog ~ z_tl_bl*z_dnam_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.04a)
+plot_model(fitlmer.04a, type = "pred", terms = c("z_dnam_bl", "z_tl_bl"))
+
+fitlmer.04b <- lmer(glue("gbl_cog ~ z_tl_bl*z_mtcn_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.04b); car::vif(fitlmer.04b)
+plot_model(fitlmer.04b, type = "pred", terms = c("z_mtcn_bl", "z_tl_bl"))
+
+
+fitlmer.04c <- lmer(glue("gbl_cog ~ z_dnam_bl*z_mtcn_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.04c)
+plot_model(fitlmer.04c, type = "pred", terms = c("z_mtcn_bl", "z_dnam_bl"))
+car::vif(fitlmer.04c)
+
+fitlmer.04d <- lmer(glue("gbl_cog ~ z_mtcn_bl*z_tl_bl*z_dnam_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"), 
+                   REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni)
+summary(fitlmer.04d)
+```
+
+```{r}
+
+gbl_cog_x.res <- bind_rows(
+  get_std_res(fitlmer.04a) %>% mutate(outcome = 'gbl_cog', model = "DNAmxTL"), 
+  get_std_res(fitlmer.04b) %>% mutate(outcome = 'gbl_cog', model = "mtDNAcnxTL"),
+  get_std_res(fitlmer.04c) %>% mutate(outcome = 'gbl_cog', model = "mtDNAcnxDNAm"),
+  get_std_res(fitlmer.04d) %>% mutate(outcome = 'gbl_cog', model = "mtDNAcnxDNAmxTL"),
+) %>% 
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),              # decimal (3 places)
+    sig = stars.pval(p.value),      
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
+  ) 
+  
+gbl_cog_x.res  %>% 
+  print(n = Inf)
+
+```
+
+```{r}
+gbl_cog_tlxdnam.p <- plot_model(fitlmer.04a, type = "pred", terms = c("z_dnam_bl", "z_tl_bl")) + 
+  labs(
+    x = "CausAge", 
+    y = "Global Cognition", 
+  ) + 
+  guides(color = guide_legend(title = "TL")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8)
+  )
+
+gbl_cog_mtcnxtl.p <- plot_model(fitlmer.04b, type = "pred", terms = c("z_mtcn_bl", "z_tl_bl")) + 
+  labs(
+    x = "mtDNAcn", 
+    y = "Global Cognition", 
+  ) + 
+  guides(color = guide_legend(title = "TL")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8)
+  )
+
+gbl_cog_mtcnxdnam.p <- plot_model(fitlmer.04c, type = "pred", terms = c("z_mtcn_bl", "z_dnam_bl")) + 
+  labs(
+    x = "mtDNAcn", 
+    y = "Global Cognition", 
+  ) + 
+  guides(color = guide_legend(title = "CausAge")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8)
+  )
+
+gbl_cog_bioage_interactions.p <- cowplot::plot_grid(gbl_cog_tlxdnam.p, gbl_cog_mtcnxtl.p, gbl_cog_mtcnxdnam.p, nrow = 1, labels = c("A", "B", "C"))
+gbl_cog_bioage_interactions.p
+
+ggsave(glue("results/plots/gbl_cog_bioage_interactions_nocdr_{DATE}.png"), plot = gbl_cog_bioage_interactions.p, width = 9, height = 4, units = 'in')
+
+```
+
+#### APOE Interactions
+```{r}
+
+## APOE Interaction
+
+fitlmer.05a <- lmer(glue("gbl_cog ~ z_tl_bl*apoe*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.05a)
+
+fitlmer.05b <- lmer(glue("gbl_cog ~ z_dnam_bl*apoe*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.05b)
+
+fitlmer.05c <- lmer(glue("gbl_cog ~ z_mtcn_bl*apoe*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"), 
+                   REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni)
+summary(fitlmer.05c)
+```
+
+
+### Cogntive Domains
+#### Episodic Memory
+```{r}
+
+cog_lt_cov <- "yrs_c + z_age_bl*yrs_c + sex + educ_cat + apoe*yrs_c + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+
+## Longitudional
+fitlmer.mem_tl <- lmer(
+      glue("PHC_MEM ~ z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.mem_dnam <- lmer(
+      glue("PHC_MEM ~ z_dnam_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.mem_mtcn <- lmer(
+      glue("PHC_MEM ~ z_mtcn_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.mem_bioag <- lmer(
+      glue("PHC_MEM ~ z_tl_bl*yrs_c + z_dnam_bl*yrs_c + z_mtcn_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+summary(fitlmer.mem_bioag)
+plot_model(fitlmer.mem_bioag, type = "pred", terms = c("yrs_c", "z_tl_bl"))
+plot_model(fitlmer.mem_bioag, type = "pred", terms = c("yrs_c", "z_dnam_bl"))
+plot_model(fitlmer.mem_bioag, type = "pred", terms = c("yrs_c", "z_mtcn_bl"))
+
+## DNAm x mtCN
+fitlmer.mem_dnam_mtcn <- lmer(glue("PHC_MEM ~ z_mtcn_bl*z_dnam_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni
+  )
+summary(fitlmer.mem_dnam_mtcn )
+
+## DNAm x TL
+fitlmer.mem_dnam_tl <- lmer(glue("PHC_MEM ~ z_dnam_bl*z_tl_bl*yrs_c +  {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni
+  )
+summary(fitlmer.mem_dnam_tl )
+
+## TL x mtCN
+fitlmer.mem_tl_mtcn <- lmer(glue("PHC_MEM ~  z_mtcn_bl*z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl(optimizer = "Nelder_Mead"), data = adni
+  )
+summary(fitlmer.mem_tl_mtcn )
+
+## TL x DNAm x mtCN
+fitlmer.mem_bioag_x <- lmer(glue("PHC_MEM ~ z_mtcn_bl*z_dnam_bl*z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.mem_bioag_x )
+```
+
+```{r}
+mem.res <- bind_rows(
+  get_std_res(fitlmer.mem_tl) %>% mutate(outcome = 'mem', model = "TL", predictor = 'TL'),
+  get_std_res(fitlmer.mem_mtcn) %>% mutate(outcome = 'mem', model = "mtDNAcn", predictor = 'mtDNAcn'),
+  get_std_res(fitlmer.mem_dnam) %>% mutate(outcome = 'mem', model = "CausAge", predictor = 'CausAge'),
+  get_std_res(fitlmer.mem_bioag) %>% mutate(outcome = 'mem', model = "BioAge"),
+  get_std_res(fitlmer.mem_dnam_tl) %>% mutate(outcome = 'mem', model = "DNAmxTL"), 
+  get_std_res(fitlmer.mem_tl_mtcn) %>% mutate(outcome = 'mem', model = "mtDNAcnxTL"),
+  get_std_res(fitlmer.mem_dnam_mtcn) %>% mutate(outcome = 'mem', model = "mtDNAcnxDNAm"),
+  get_std_res(fitlmer.mem_bioag_x ) %>% mutate(outcome = 'mem', model = "mtDNAcnxDNAmxTL"),
+) %>% 
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),              # decimal (3 places)
+    sig = stars.pval(p.value),      
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
+  ) 
+  
+```
+
+#### Executive Function
+```{r}
+
+fitlmer.exf_tl <- lmer(
+      glue("PHC_EXF ~ z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.exf_dnam <- lmer(
+      glue("PHC_EXF ~ z_dnam_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.exf_mtcn <- lmer(
+      glue("PHC_EXF ~ z_mtcn_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.exf_bioag <- lmer(glue("PHC_EXF ~ z_tl_bl*yrs_c + z_dnam_bl*yrs_c + z_mtcn_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.exf_bioag)
+plot_model(fitlmer.exf_bioag, type = "pred", terms = c("yrs_c", "z_tl_bl"))
+plot_model(fitlmer.exf_bioag, type = "pred", terms = c("yrs_c", "z_dnam_bl"))
+plot_model(fitlmer.exf_bioag, type = "pred", terms = c("yrs_c", "z_mtcn_bl"))
+
+## DNAm x mtCN
+fitlmer.exf_dnam_mtcn <- lmer(glue("PHC_EXF ~ z_mtcn_bl*z_dnam_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.exf_dnam_mtcn )
+
+## DNAm x TL
+fitlmer.exf_dnam_tl <- lmer(glue("PHC_EXF ~ z_dnam_bl*z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.exf_dnam_tl )
+
+## TL x mtCN
+fitlmer.exf_tl_mtcn <- lmer(glue("PHC_EXF ~ z_mtcn_bl*z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.exf_tl_mtcn )
+
+## TL x DNAm x mtCN
+fitlmer.exf_bioag_x <- lmer(glue("PHC_EXF ~ z_mtcn_bl*z_dnam_bl*z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.exf_bioag_x )
+```
+
+```{r}
+exf.res <- bind_rows(
+  get_std_res(fitlmer.exf_tl) %>% mutate(outcome = 'exf', model = "TL", predictor = 'TL'),
+  get_std_res(fitlmer.exf_mtcn) %>% mutate(outcome = 'exf', model = "mtDNAcn", predictor = 'mtDNAcn'),
+  get_std_res(fitlmer.exf_dnam) %>% mutate(outcome = 'exf', model = "CausAge", predictor = 'CausAge'),
+  get_std_res(fitlmer.exf_bioag) %>% mutate(outcome = 'exf', model = "BioAge"),
+  get_std_res(fitlmer.exf_dnam_tl) %>% mutate(outcome = 'exf', model = "DNAmxTL"), 
+  get_std_res(fitlmer.exf_tl_mtcn) %>% mutate(outcome = 'exf', model = "mtDNAcnxTL"),
+  get_std_res(fitlmer.exf_dnam_mtcn) %>% mutate(outcome = 'exf', model = "mtDNAcnxDNAm"),
+  get_std_res(fitlmer.exf_bioag_x ) %>% mutate(outcome = 'exf', model = "mtDNAcnxDNAmxTL"),
+) %>% 
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),              # decimal (3 places)
+    sig = stars.pval(p.value),      
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
+  ) 
+  
+```
+
+#### Language
+```{r}
+
+fitlmer.lan_tl <- lmer(
+      glue("PHC_LAN ~ z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.lan_dnam <- lmer(
+      glue("PHC_LAN ~ z_dnam_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.lan_mtcn <- lmer(
+      glue("PHC_LAN ~ z_mtcn_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.lan_bioag <- lmer(glue("PHC_LAN ~ z_tl_bl*yrs_c + z_dnam_bl*yrs_c + z_mtcn_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.lan_bioag)
+plot_model(fitlmer.lan_bioag, type = "pred", terms = c("yrs_c", "z_tl_bl"))
+plot_model(fitlmer.lan_bioag, type = "pred", terms = c("yrs_c", "z_dnam_bl"))
+plot_model(fitlmer.lan_bioag, type = "pred", terms = c("yrs_c", "z_mtcn_bl"))
+
+## DNAm x mtCN
+fitlmer.lan_dnam_mtcn <- lmer(glue("PHC_LAN ~ z_mtcn_bl*z_dnam_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.lan_dnam_mtcn )
+
+## DNAm x TL
+fitlmer.lan_dnam_tl <- lmer(glue("PHC_LAN ~ z_dnam_bl*z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.lan_dnam_tl )
+
+## TL x mtCN
+fitlmer.lan_tl_mtcn <- lmer(glue("PHC_LAN ~ z_mtcn_bl*z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.lan_tl_mtcn )
+
+## TL x DNAm x mtCN
+fitlmer.lan_bioag_x <- lmer(glue("PHC_LAN ~ z_mtcn_bl*z_dnam_bl*z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.lan_bioag_x )
+
+```
+
+```{r}
+lan.res <- bind_rows(
+  get_std_res(fitlmer.lan_tl) %>% mutate(outcome = 'lan', model = "TL", predictor = 'TL'),
+  get_std_res(fitlmer.lan_mtcn) %>% mutate(outcome = 'lan', model = "mtDNAcn", predictor = 'mtDNAcn'),
+  get_std_res(fitlmer.lan_dnam) %>% mutate(outcome = 'lan', model = "CausAge", predictor = 'CausAge'),
+  get_std_res(fitlmer.lan_bioag) %>% mutate(outcome = 'lan', model = "BioAge"),
+  get_std_res(fitlmer.lan_dnam_tl) %>% mutate(outcome = 'lan', model = "DNAmxTL"), 
+  get_std_res(fitlmer.lan_tl_mtcn) %>% mutate(outcome = 'lan', model = "mtDNAcnxTL"),
+  get_std_res(fitlmer.lan_dnam_mtcn) %>% mutate(outcome = 'lan', model = "mtDNAcnxDNAm"),
+  get_std_res(fitlmer.lan_bioag_x ) %>% mutate(outcome = 'lan', model = "mtDNAcnxDNAmxTL"),
+) %>% 
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),              # decimal (3 places)
+    sig = stars.pval(p.value),      
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
+  ) 
+  
+```
+
+#### Visualspatial
+```{r}
+
+fitlmer.vsp_tl <- lmer(
+      glue("PHC_VSP ~ z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.vsp_dnam <- lmer(
+      glue("PHC_VSP ~ z_dnam_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.vsp_mtcn <- lmer(
+      glue("PHC_VSP ~ z_mtcn_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+
+fitlmer.vsp_bioag <- lmer(glue("PHC_VSP ~ z_tl_bl*yrs_c + z_dnam_bl*yrs_c + z_mtcn_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.vsp_bioag)
+plot_model(fitlmer.vsp_bioag, type = "pred", terms = c("yrs_c", "z_tl_bl"))
+plot_model(fitlmer.vsp_bioag, type = "pred", terms = c("yrs_c", "z_dnam_bl"))
+plot_model(fitlmer.vsp_bioag, type = "pred", terms = c("yrs_c", "z_mtcn_bl"))
+
+## DNAm x mtCN
+fitlmer.vsp_dnam_mtcn <- lmer(glue("PHC_VSP ~ z_mtcn_bl*z_dnam_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.vsp_dnam_mtcn )
+
+## DNAm x TL
+fitlmer.vsp_dnam_tl <- lmer(glue("PHC_VSP ~ z_dnam_bl*z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.vsp_dnam_tl )
+
+## TL x mtCN
+fitlmer.vsp_tl_mtcn <- lmer(glue("PHC_VSP ~ z_mtcn_bl*z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.vsp_tl_mtcn )
+
+## TL x DNAm x mtCN
+fitlmer.vsp_bioag_x <- lmer(glue("PHC_VSP ~ z_mtcn_bl*z_dnam_bl*z_tl_bl*yrs_c + {cog_lt_cov} + (yrs_c  | RID)"),
+      REML = FALSE, control = lmerControl('optimx', optCtrl=list(method='nlminb')), data = adni
+  )
+summary(fitlmer.vsp_bioag_x )
+
+```
+
+```{r}
+vsp.res <- bind_rows(
+  get_std_res(fitlmer.vsp_tl) %>% mutate(outcome = 'vsp', model = "TL", predictor = 'TL'),
+  get_std_res(fitlmer.vsp_mtcn) %>% mutate(outcome = 'vsp', model = "mtDNAcn", predictor = 'mtDNAcn'),
+  get_std_res(fitlmer.vsp_dnam) %>% mutate(outcome = 'vsp', model = "CausAge", predictor = 'CausAge'),
+  get_std_res(fitlmer.vsp_bioag) %>% mutate(outcome = 'vsp', model = "BioAge"),
+  get_std_res(fitlmer.vsp_dnam_tl) %>% mutate(outcome = 'vsp', model = "DNAmxTL"), 
+  get_std_res(fitlmer.vsp_tl_mtcn) %>% mutate(outcome = 'vsp', model = "mtDNAcnxTL"),
+  get_std_res(fitlmer.vsp_dnam_mtcn) %>% mutate(outcome = 'vsp', model = "mtDNAcnxDNAm"),
+  get_std_res(fitlmer.vsp_bioag_x ) %>% mutate(outcome = 'vsp', model = "mtDNAcnxDNAmxTL"),
+) %>% 
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),              # decimal (3 places)
+    sig = stars.pval(p.value),      
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
+  ) 
+  
+```
+
+
+## Fluid Biomarkers 
+### AB42
+```{r}
+csf_cov <- "age + sex + apoe + nk_cell + b_cell + cd4_t_cell + cd8_t_cell + monocyte"
+## ab42
+ab42_mtcn.res <- lm(glue("PHC_AB42 ~ z_mtcn + {csf_cov}"), data = flbm.df) 
+ab42_dnam.res <- lm(glue("PHC_AB42 ~ z_dnam + {csf_cov}"), data = flbm.df) 
+ab42_tl.res <- lm(glue("PHC_AB42 ~ z_tl + {csf_cov}"), data = flbm.df)
+ab42_bioage.res <- lm(glue("PHC_AB42 ~ z_mtcn + z_dnam + z_tl + {csf_cov}"), data = flbm.df) 
+
+ab42_dnamxtl.res <- lm(glue("PHC_AB42 ~ z_dnam * z_tl + {csf_cov}"), data = flbm.df) 
+ab42_mtcnxtl.res <- lm(glue("PHC_AB42 ~ z_mtcn * z_tl + {csf_cov}"), data = flbm.df) 
+ab42_mtcnxdnam.res <- lm(glue("PHC_AB42 ~ z_mtcn * z_dnam + {csf_cov}"), data = flbm.df) 
+ab42_mtcnxdnamxtl.res <- lm(glue("PHC_AB42 ~ z_mtcn * z_dnam * z_tl + {csf_cov}"), data = flbm.df)
+
+ab42.res <- bind_rows(
+  get_std_res(ab42_mtcn.res) %>% mutate(outcome = "AB42", model = 'mtDNAcn'),
+  get_std_res(ab42_dnam.res) %>% mutate(outcome = "AB42", model = 'DNAm'),
+  get_std_res(ab42_tl.res) %>% mutate(outcome = "AB42", model = 'TL'),
+  get_std_res(ab42_bioage.res) %>% mutate(outcome = "AB42", model = 'bioage'),
+  get_std_res(ab42_dnamxtl.res) %>% mutate(outcome = "AB42", model = 'DNAmxTL'),
+  get_std_res(ab42_mtcnxtl.res) %>% mutate(outcome = "AB42", model = 'mtDNAcnxTL'),
+  get_std_res(ab42_mtcnxdnam.res) %>% mutate(outcome = "AB42", model = 'mtDNAcnxDNAm'),
+  get_std_res(ab42_mtcnxdnamxtl.res) %>% mutate(outcome = "AB42", model = 'mtDNAcnxDNAmxTL'),
+)
+
+```
+
+### Tau
+```{r}
+## tau
+tau_mtcn.res <- lm(glue("PHC_Tau ~ z_mtcn + {csf_cov}"), data = flbm.df) 
+tau_dnam.res <- lm(glue("PHC_Tau ~ z_dnam + {csf_cov}"), data = flbm.df) 
+tau_tl.res <- lm(glue("PHC_Tau ~ z_tl + {csf_cov}"), data = flbm.df) 
+tau_bioage.res <- lm(glue("PHC_Tau ~ z_mtcn + z_dnam + z_tl + {csf_cov}"), data = flbm.df) 
+
+tau_dnamxtl.res <- lm(glue("PHC_Tau ~ z_dnam * z_tl + {csf_cov}"), data = flbm.df) 
+tau_mtcnxtl.res <- lm(glue("PHC_Tau ~ z_mtcn * z_tl + {csf_cov}"), data = flbm.df) 
+tau_mtcnxdnam.res <- lm(glue("PHC_Tau ~ z_mtcn * z_dnam + {csf_cov}"), data = flbm.df) 
+tau_mtcnxdnamxtl.res <- lm(glue("PHC_Tau ~ z_mtcn * z_dnam * z_tl + {csf_cov}"), data = flbm.df) 
+
+tau.res <- bind_rows(
+  get_std_res(tau_mtcn.res) %>% mutate(outcome = "Tau", model = 'mtDNAcn'),
+  get_std_res(tau_dnam.res) %>% mutate(outcome = "Tau", model = 'DNAm'),
+  get_std_res(tau_tl.res) %>% mutate(outcome = "Tau", model = 'TL'),
+  get_std_res(tau_bioage.res) %>% mutate(outcome = "Tau", model = 'bioage'),
+  get_std_res(tau_dnamxtl.res) %>% mutate(outcome = "Tau", model = 'DNAmxTL'),
+  get_std_res(tau_mtcnxtl.res) %>% mutate(outcome = "Tau", model = 'mtDNAcnxTL'),
+  get_std_res(tau_mtcnxdnam.res) %>% mutate(outcome = "Tau", model = 'mtDNAcnxDNAm'),
+  get_std_res(tau_mtcnxdnamxtl.res) %>% mutate(outcome = "Tau", model = 'mtDNAcnxDNAmxTL'),
+)
+
+```
+
+### pTau
+```{r}
+## pTau
+ptau_mtcn.res <- lm(glue("PHC_pTau ~ z_mtcn + {csf_cov}"), data = flbm.df) 
+ptau_dnam.res <- lm(glue("PHC_pTau ~ z_dnam + {csf_cov}"), data = flbm.df) 
+ptau_tl.res <- lm(glue("PHC_pTau ~ z_tl + {csf_cov}"), data = flbm.df) 
+ptau_bioage.res <- lm(glue("PHC_pTau ~ z_mtcn + z_dnam + z_tl + {csf_cov}"), data = flbm.df) 
+
+ptau_dnamxtl.res <- lm(glue("PHC_pTau ~ z_dnam * z_tl + {csf_cov}"), data = flbm.df)
+ptau_mtcnxtl.res <- lm(glue("PHC_pTau ~ z_mtcn * z_tl + {csf_cov}"), data = flbm.df) 
+ptau_mtcnxdnam.res <- lm(glue("PHC_pTau ~ z_mtcn * z_dnam + {csf_cov}"), data = flbm.df) 
+ptau_mtcnxdnamxtl.res <- lm(glue("PHC_pTau ~ z_mtcn * z_dnam * z_tl + {csf_cov}"), data = flbm.df) 
+
+ptau.res <- bind_rows(
+  get_std_res(ptau_mtcn.res) %>% mutate(outcome = "pTau", model = 'mtDNAcn'),
+  get_std_res(ptau_dnam.res) %>% mutate(outcome = "pTau", model = 'DNAm'),
+  get_std_res(ptau_tl.res) %>% mutate(outcome = "pTau", model = 'TL'),
+  get_std_res(ptau_bioage.res) %>% mutate(outcome = "pTau", model = 'bioage'),
+  get_std_res(ptau_dnamxtl.res) %>% mutate(outcome = "pTau", model = 'DNAmxTL'),
+  get_std_res(ptau_mtcnxtl.res) %>% mutate(outcome = "pTau", model = 'mtDNAcnxTL'),
+  get_std_res(ptau_mtcnxdnam.res) %>% mutate(outcome = "pTau", model = 'mtDNAcnxDNAm'),
+  get_std_res(ptau_mtcnxdnamxtl.res) %>% mutate(outcome = "pTau", model = 'mtDNAcnxDNAmxTL'),
+)
+
+```
+
+### Results
+```{r}
+csf.res <- bind_rows(
+  ab42.res,
+  tau.res,
+  ptau.res
+) %>%
+  relocate(outcome, model) %>% 
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),              # decimal (3 places)
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
+  ) 
+
+csf.res %>%
+  filter(term %in% c('z_mtcn', 'z_dnam', 'z_tl')) %>%
+  filter(model == 'bioage') %>%
+  print(n = Inf)
+
+csf.res %>%
+  filter(str_detect(term, ":")) %>%
+  select(outcome, model, term, out) %>%
+  print(n = Inf)
+
+```
+
+```{r}
+csf_coef.p <- csf.res %>%
+  filter(term %in% c('z_mtcn', 'z_dnam', 'z_tl')) %>%
+  mutate(
+    term = case_when(
+      term == "z_mtcn" ~ 'mtDNAcn', 
+      term == "z_dnam" ~ 'CausAge', 
+      term == "z_tl" ~ 'TL'
+    )
+  ) %>%
+  ggplot(., aes(x = estimate, y = term)) + 
+  facet_grid(rows = vars(outcome)) + 
+  geom_point() + 
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  labs(
+    x = "Coefficient Estimate (95% CI)",
+    y = NULL,
+  ) +
+  theme_bw() + 
+  theme(
+    strip.background = element_blank()
+  )
+
+csf_coef.p
+
+ggsave(glue("results/plots/csf_bioage_nocdr_{DATE}.png"), plot = csf_coef.p, width = 9, height = 4, units = 'in')
+
+
+plot_model(ab42_dnamxtl.res, type = "pred", terms = c("z_dnam", "z_tl")) + 
+  labs(
+    x = "CausAge", 
+    y = "AB42", 
+  ) + 
+  guides(color = guide_legend(title = "TL")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8)
+  )
+
+```
+
+## Neuroimaging 
+### Cortical Thickness
+```{r}
+## Cortical Thickness meta ROI
+cort_thk_covar = "age_bl + sex + apoe + months + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+
+cort_thk_mtcn.res <- lm(glue("cort_thk_volwt ~ z_mtcn_bl + {cort_thk_covar}"), data = mri.df)
+cort_thk_dnam.res <- lm(glue("cort_thk_volwt ~ z_dnam_bl + {cort_thk_covar}"), data = mri.df) 
+cort_thk_tl.res <- lm(glue("cort_thk_volwt ~ z_tl_bl + {cort_thk_covar}"), data = mri.df) 
+cort_thk_bioage.res <- lm(glue("cort_thk_volwt ~ z_mtcn_bl + z_dnam_bl + z_tl_bl + {cort_thk_covar}"), data = mri.df) 
+
+cort_thk_dnamxtl.res <- lm(glue("cort_thk_volwt ~ z_dnam_bl * z_tl_bl + {cort_thk_covar}"), data = mri.df) 
+cort_thk_mtcnxtl.res <- lm(glue("cort_thk_volwt ~ z_mtcn_bl * z_tl_bl + {cort_thk_covar}"), data = mri.df) 
+cort_thk_mtcnxdnam.res <- lm(glue("cort_thk_volwt ~ z_mtcn_bl * z_dnam_bl + {cort_thk_covar}"), data = mri.df)
+cort_thk_mtcnxdnamxtl.res <- lm(glue("cort_thk_volwt ~ z_mtcn_bl * z_dnam_bl * z_tl_bl + {cort_thk_covar}"), data = mri.df) 
+```
+
+
+### Gray Matter Volume
+```{r}
+## Gray matter volume meta ROI
+gm_vol_covar = "age_bl + sex + apoe + months + EstimatedTotalIntraCranialVol_combat + nk_cell_bl + b_cell_bl + cd4_t_cell_bl + cd8_t_cell_bl + monocyte_bl"
+
+gmvol_mtcn.res <- lm(glue("gm_vol ~ z_mtcn_bl + {gm_vol_covar}"), data = mri.df) 
+gmvol_dnam.res <- lm(glue("gm_vol ~ z_dnam_bl + {gm_vol_covar}"), data = mri.df) 
+gmvol_tl.res <- lm(glue("gm_vol ~ z_tl_bl + {gm_vol_covar}"), data = mri.df)
+gmvol_bioage.res <- lm(glue("gm_vol ~  z_mtcn_bl + z_dnam_bl + z_tl_bl + {gm_vol_covar}"), data = mri.df)
+
+gmvol_dnamxtl.res <- lm(glue("gm_vol ~ z_dnam_bl * z_tl_bl + {gm_vol_covar}"), data = mri.df) 
+gmvol_mtcnxtl.res <- lm(glue("gm_vol ~ z_mtcn_bl * z_tl_bl + {gm_vol_covar}"), data = mri.df) 
+gmvol_mtcnxdnam.res <- lm(glue("gm_vol ~ z_mtcn_bl * z_dnam_bl + {gm_vol_covar}"), data = mri.df) 
+gmvol_mtcnxdnamxtl.res <- lm(glue("gm_vol ~ z_mtcn_bl * z_dnam_bl * z_tl_bl + {gm_vol_covar}"), data = mri.df)
+
+```
+
+### Results
+```{r}
+mri.res <- bind_rows(
+  get_std_res(cort_thk_mtcn.res) %>% mutate(outcome = "Cortical Thickness", model = 'mtDNAcn'),
+  get_std_res(cort_thk_dnam.res) %>% mutate(outcome = "Cortical Thickness", model = 'DNAm'),
+  get_std_res(cort_thk_tl.res) %>% mutate(outcome = "Cortical Thickness", model = 'TL'),
+  get_std_res(cort_thk_bioage.res) %>% mutate(outcome = "Cortical Thickness", model = 'bioage'),
+  get_std_res(cort_thk_dnamxtl.res) %>% mutate(outcome = "Cortical Thickness", model = 'DNAmxTL'),
+  get_std_res(cort_thk_mtcnxtl.res) %>% mutate(outcome = "Cortical Thickness", model = 'mtDNAcnxTL'),
+  get_std_res(cort_thk_mtcnxdnam.res) %>% mutate(outcome = "Cortical Thickness", model = 'mtDNAcnxDNAm'),
+  get_std_res(cort_thk_mtcnxdnamxtl.res) %>% mutate(outcome = "Cortical Thickness", model = 'mtDNAcnxDNAmxTL'),
+
+  get_std_res(gmvol_mtcn.res) %>% mutate(outcome = "GM Vol", model = 'mtDNAcn'),
+  get_std_res(gmvol_dnam.res) %>% mutate(outcome = "GM Vol", model = 'DNAm'),
+  get_std_res(gmvol_tl.res) %>% mutate(outcome = "GM Vol", model = 'TL'),
+  get_std_res(gmvol_bioage.res) %>% mutate(outcome = "GM Vol", model = 'bioage'),
+  get_std_res(gmvol_dnamxtl.res) %>% mutate(outcome = "GM Vol", model = 'DNAmxTL'),
+  get_std_res(gmvol_mtcnxtl.res) %>% mutate(outcome = "GM Vol", model = 'mtDNAcnxTL'),
+  get_std_res(gmvol_mtcnxdnam.res) %>% mutate(outcome = "GM Vol", model = 'mtDNAcnxDNAm'),
+  get_std_res(gmvol_mtcnxdnamxtl.res) %>% mutate(outcome = "GM Vol", model = 'mtDNAcnxDNAmxTL'),
+
+) %>%
+  relocate(outcome, model) %>% 
+  mutate(
+    estimate = signif(estimate, 2),
+    std.error = signif(std.error, 2),
+    p.value_fmt = if_else(
+      p.value < 0.001,
+      formatC(p.value, format = "e", digits = 2),  # scientific notation
+      as.character(round(p.value, 3))),              # decimal (3 places)
+    out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
+  ) 
+
+mri.res %>%
+  filter(term %in% c('mtcn_bl', 'causage_bl', 'tl_bl')) %>%
+  filter(model %in% c('mtDNAcn', 'DNAm', 'TL'))  %>%
+  select(outcome, model, term, out)
+
+mri.res %>%
+  filter(term %in% c('mtcn_bl', 'causage_bl', 'tl_bl')) %>%
+  filter(model %in% c('bioage'))  %>%
+  select(outcome, model, term, out)
+
+mri.res %>%
+  filter(str_detect(term, ":")) %>%
+  select(outcome, model, term, out)
+
+```
+
+### Plots
+
+```{r}
+mri_coef.p <- mri.res %>%
+  filter(term %in% c('mtcn_bl', 'causage_bl', 'tl_bl')) %>%
+  filter(model == 'bioage') %>%
+  mutate(
+    term = case_when(
+      term == "mtcn_bl" ~ 'mtDNAcn', 
+      term == "causage_bl" ~ 'CausAge', 
+      term == "tl_bl" ~ 'TL'
+    )
+  ) %>%
+  ggplot(., aes(x = estimate, y = term)) + 
+  facet_grid(rows = vars(outcome), scales = 'free') + 
+  geom_point() + 
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  labs(
+    x = "Coefficient Estimate (95% CI)",
+    y = NULL,
+  ) +
+  theme_bw() + 
+  theme(
+    strip.background = element_blank()
+  )
+mri_coef.p
+
+ggsave(glue("results/plots/mri_bioage_nocdr_{DATE}.png"), plot = mri_coef.p, width = 9, height = 4, units = 'in')
+
+```
+
+
+```{r}
+
+# Joint Modles 
+plot_model(cort_thk_bioage.res, type = "pred", terms = c("causage_bl"))
+plot_model(cort_thk_bioage.res, type = "pred", terms = c("mtcn_bl"))
+plot_model(cort_thk_bioage.res, type = "pred", terms = c("tl_bl"))
+cort_thk_bioage.res <- lm(glue("cort_thk_volwt ~ mtcn_bl + causage_bl + tl_bl + {cort_thk_covar}"), data = mri.df) 
+gmvol_bioage.res <- lm(glue("gm_vol ~  mtcn_bl + causage_bl + tl_bl + {gm_vol_covar}"), data = mri.df)
+
+
+
+plot_model(cort_thk_dnamxtl.res, type = "pred", terms = c("causage_bl", "tl_bl"))
+
+plot_model(gmvol_mtcnxdnamxtl.res, type = "pred", terms = c("mtcn_bl", "causage_bl", "tl_bl"))
+plot_model(gmvol_mtcnxdnamxtl.res, type = "int")
+
+```
+
+
+## Summarize Results
+### all results
+```{r}
+#| label: results_all
+
+cog_summary.res <- bind_rows(
+    mem.res, 
+    exf.res, 
+    lan.res, 
+    vsp.res
+  ) %>% 
+  mutate(
+    endophenotype = 'Cognition',
+    model = ifelse(str_detect(model, 'CausAge'), "DNAm", model),
+    model2 = case_when(
+      model %in% c('TL', 'DNAm', 'mtDNAcn') ~ 'Single',
+      model == 'BioAge' ~ 'Joint', 
+      str_detect(model, "x") ~ 'Interaction',
+    ),
+    model = case_when(
+      model == 'BioAge' & str_detect(term, 'z_tl_bl') ~ 'TL',
+      model == 'BioAge' & str_detect(term, 'z_mtcn_bl') ~ 'mtDNAcn',
+      model == 'BioAge' & str_detect(term, 'z_dnam_bl') ~ "DNAm",
+      TRUE ~ model
+    ),
+    outcome = fct_recode(outcome, 'Memory' = 'mem', "Language" = 'lan', 'Executive Function' = 'exf', 'Visuospatial ability' = 'vsp'),
+    outcome = case_when(
+      str_detect(term, "yrs") ~ paste0(outcome, " Decline"), 
+      TRUE ~ outcome
+    ),
+    term = if_else(
+      str_detect(term, ":"),
+      map_chr(str_split(term, ":"), ~ paste(sort(.x), collapse = ":")),
+      term
+    )
+  ) %>% 
+  relocate(outcome, model, model2) %>%
+  filter(str_detect(term, "mtcn|dnam|tl")) %>%
+  filter(!(model2 == 'Interaction' & !str_detect(term, ":"))) %>%
+  filter(!(model2 == 'Interaction' & term %in% c("yrs_c:z_tl_bl", "yrs_c:z_dnam_bl", "yrs_c:z_mtcn_bl"))) %>%
+  filter(!(model == "mtDNAcnxDNAmxTL" & str_count(term, ":") < 2)) %>%
+  filter(!(model == "mtDNAcnxDNAmxTL" & str_count(term, ":") == 2 & str_detect(term, "yrs_c"))) %>%
+  mutate(  
+    term = model, 
+    model = model2
+  ) %>% 
+  select(-model2)
+
+
+res <- bind_rows(
+  gbl_cog_bioage.res %>%
+    # select(outcome, model, term, p.value) %>%
+    filter(str_detect(term, "mtcn|dnam|tl")) %>%
+    mutate(
+      endophenotype = 'Cognition',
+      outcome = ifelse(str_detect(term, "yrs"), 'Global Cognitive Decline', 'Global Cognition'), 
+      model = ifelse(model == 'BioAge', 'Joint', 'Single'),
+      term = case_when(
+        str_detect(term, 'tl') ~ 'TL',
+        str_detect(term, 'mtcn') ~ 'mtDNAcn',
+        str_detect(term, 'dnam') ~ "DNAm",
+      )
+      ),
+  
+  gbl_cog_x.res %>%
+    #select(outcome, model, term, p.value) %>%
+    filter(str_detect(term, "mtcn|dnam|tl")) %>%
+    filter(str_detect(term, ":"))  %>%
+    filter(term %nin% c("z_tl_bl:yrs_c", "z_dnam_bl:yrs_c", "z_mtcn_bl:yrs_c")) %>%
+    filter(!(model == "mtDNAcnxDNAmxTL" & str_count(term, ":") < 2)) %>%
+    filter(!(model == "mtDNAcnxDNAmxTL" & str_count(term, ":") == 2 & str_detect(term, "yrs_c"))) %>%
+    mutate(
+      endophenotype = 'Cognition',
+      outcome = ifelse(str_detect(term, "yrs"), 'Global Cognitive Decline', 'Global Cognition'), 
+      term = model,
+      model = "Interaction",
+      ), 
+  
+  cog_summary.res, 
+
+  mri.res %>%
+    #select(outcome, model, term, p.value) %>%
+    filter(str_detect(term, "mtcn|dnam|tl")) %>%
+    mutate(
+      endophenotype = 'MRI',
+      model2 = case_when(
+        model == 'bioage' ~ 'Joint', 
+        str_detect(model, 'x') ~ 'Interaction', 
+        TRUE ~ 'Single'
+      ), 
+      model = case_when(
+        model == 'bioage' & str_detect(term, 'tl') ~ 'TL',
+        model == 'bioage' & str_detect(term, 'mtcn') ~ 'mtDNAcn',
+        model == 'bioage' & str_detect(term, 'dnam') ~ "DNAm",
+        TRUE ~ model
+      )
+    ) %>%
+    filter(!(model2 == 'Interaction' & !str_detect(term, ":"))) %>%
+    filter(!(model == 'mtDNAcnxDNAmxTL' & str_count(term, ":") < 2)) %>%
+    mutate(  
+      term = model, 
+      model = model2
+    ) %>% 
+    select(-model2), 
+
+  csf.res %>%
+    #select(outcome, model, term, p.value) %>%
+    filter(str_detect(term, "mtcn|dnam|tl")) %>%
+      mutate(
+      endophenotype = 'CSF',
+      model2 = case_when(
+        model == 'bioage' ~ 'Joint', 
+        str_detect(model, 'x') ~ 'Interaction', 
+        TRUE ~ 'Single'
+      ), 
+      model = case_when(
+        model == 'bioage' & str_detect(term, 'tl') ~ 'TL',
+        model == 'bioage' & str_detect(term, 'mtcn') ~ 'mtDNAcn',
+        model == 'bioage' & str_detect(term, 'dnam') ~ "DNAm",
+        TRUE ~ model
+      )
+    )  %>%
+    filter(!(model2 == 'Interaction' & !str_detect(term, ":"))) %>%
+    filter(!(model == 'mtDNAcnxDNAmxTL' & str_count(term, ":") < 2)) %>%
+    mutate(  
+      term = model, 
+      model = model2
+    ) %>% 
+    select(-model2)
+)
+
+
+res.df <- res %>% 
+  select(endophenotype, outcome, model, term, Std_Coefficient, CI_low, CI_high, p.value) %>%
+  # pivot_wider(names_from = outcome, values_from = p.value) %>%
+  mutate(
+    signif = case_when(
+      p.value < 0.05               ~ "\u2713",  # check mark ✓
+      p.value >= 0.05 & p.value < 0.1 ~ "\u2022",  # bullet •
+      p.value >= 0.1               ~ "\u2717"   # cross ✗
+    ), 
+    sig = ifelse(p.value < 0.05, TRUE, FALSE),
+    model = fct_relevel(model, 'Single', 'Joint','Interaction'), 
+    term = fct_relevel(term, 'mtDNAcnxDNAmxTL'), 
+    outcome = fct_relevel(outcome, 'Global Cognition', 'Global Cognitive Decline', 'Memory', 'Memory Decline'),
+    endophenotype = case_when(
+      str_detect(outcome, "Decline") ~ "Longitudinal Cog.", 
+      endophenotype == 'Cognition' ~ 'Baseline Cog.', 
+      TRUE ~ endophenotype
+    ), 
+    endophenotype = fct_relevel(endophenotype, 'Baseline Cog.', "Longitudinal Cog.")
+  )
+  
+res.p <- ggplot(res.df, aes(x = outcome, y = term, label = signif, color = signif)) +
+  geom_text(size = 6, family = "Arial Unicode MS") +
+  facet_grid(rows = vars(model), cols = vars(endophenotype), 
+             scales = "free", space = "free") +
+  scale_color_manual(values = c("black", "darkgreen", "firebrick")) +
+  # Move x-axis labels to the top
+  scale_x_discrete(position = "top") +
+  labs(x = NULL, y = NULL) +
+  theme_bw() +
+  theme(
+    # Angle the top labels
+    axis.text.x.top = element_text(angle = 45, hjust = 0),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(), 
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    strip.text.x = element_blank(),
+    legend.position = "none"
+  )
+ 
+res.p  
+
+ggsave(glue("results/plots/results_nocdr_{DATE}.png"), plot = res.p , width = 9, height = 4, units = 'in')
+
+
+```
+
+```{r}
+#| label: coefficent plot
+
+## Single 
+single.p <- ggplot(filter(res.df, model == 'Single'), aes(x = Std_Coefficient, y = fct_rev(outcome), colour = sig)) + 
+  facet_grid(rows = vars(endophenotype),   
+             cols  = vars(term),
+             scales = "free_y", space = "free_y") +
+  geom_vline(xintercept = 0, linetype = 2, colour = "grey70") +
+  geom_pointrange(aes(xmin = CI_low, xmax = CI_high),
+                  position = position_dodge(width = .6),
+                  fatten   = 1.3) +
+  scale_colour_manual(values = c('#052049', '#C42882')) + 
+  labs(x = "Standardised β (95% CI)",
+      y = NULL, colour = NULL, 
+      title = "Independent Effects", tag = 'A)') +
+  theme_bw(base_size = 8) + 
+  theme(
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold"),
+      legend.position = "none", 
+      plot.margin = margin(0, 0, 0, 0)
+    )
+
+## Joint
+joint.p <- ggplot(filter(res.df, model == 'Joint'), aes(x = Std_Coefficient, y = fct_rev(outcome), colour = sig)) + 
+  facet_grid(rows = vars(endophenotype),   
+             cols  = vars(term),
+             scales = "free_y", space = "free_y") +
+  geom_vline(xintercept = 0, linetype = 2, colour = "grey70") +
+  geom_pointrange(aes(xmin = CI_low, xmax = CI_high),
+                  position = position_dodge(width = .6),
+                  fatten   = 1.3) +
+  scale_colour_manual(values = c('#052049', '#C42882')) + 
+  labs(x = "Standardised β (95% CI)",
+      y = NULL, colour = NULL, 
+      title = "Joint Effects", tag = "B)") +
+  theme_bw(base_size = 8) + 
+  theme(
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold"),
+      legend.position = "none", 
+      plot.margin = margin(0, 0, 0, 0)
+    )
+
+joint_coeff.p <- cowplot::plot_grid(
+  single.p + theme(strip.text.y = element_blank()), 
+  joint.p + theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+)
+
+joint_coeff.p
+
+ggsave(glue("results/plots/coeff_joint_nocdr_{DATE}.png"), plot = joint_coeff.p , width = 7.5, height = 3.2, units = 'in', dpi = 300)
+
+## Interaction 
+## Joint
+int.p <- ggplot(filter(res.df, model == 'Interaction'), aes(x = Std_Coefficient, y = fct_rev(outcome), colour = sig)) + 
+  facet_grid(rows = vars(endophenotype),   
+             cols  = vars(fct_rev(term)),
+             scales = "free_y", space = "free_y") +
+  geom_vline(xintercept = 0, linetype = 2, colour = "grey70") +
+  geom_pointrange(aes(xmin = CI_low, xmax = CI_high),
+                  position = position_dodge(width = .6),
+                  fatten   = 1.3) +
+  scale_colour_manual(values = c('#052049', '#C42882')) + 
+  labs(x = "Standardised β (95% CI)",
+      y = NULL, colour = NULL, 
+    #  title = "Joint Effects", 
+      tag = "A)") +
+  theme_bw(base_size = 8) + 
+  theme(
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold"),
+      legend.position = "none", 
+      plot.margin = margin(0, 0, 0, 0)
+    )
+
+int.p
+
+ggsave(glue("results/plots/coeff_interactions_nocdr_{DATE}.png"), plot = int.p , width = 7.5, height = 3.2, units = 'in', dpi = 300)
+
+
+```
+
+### Export tables
+```{r}
+#| label: export_results_all
+
+res.out <- res %>% 
+  mutate(
+    out = glue("{estimate} ({std.error}){sig}")
+  ) %>%
+  select(outcome, model, term, out) %>%
+  pivot_wider(
+    names_from = outcome,
+    values_from = out
+  ) %>%
+  unite("Global Cognition", c("Global Cognition", "Global Cognitive Decline"), sep = "; ") %>%
+  unite("Memory", c("Memory", "Memory Decline"), sep = "; ") %>%
+  unite("Executive Function", c("Executive Function", "Executive Function Decline"), sep = "; ") %>%
+  unite("Language", c("Language", "Language Decline"), sep = "; ") %>%
+  unite("Visualspatial", c("Visuospatial ability", "Visuospatial ability Decline"), sep = "; ")
+
+res.out
+
+write_csv(res.out, glue("results/all_results_nocdr_{DATE}.csv"))
+
+
+```
+
+
+```{r}
+#| label: export_cog_results
+
+
+cog_bioage.out <- bind_rows(
+    gbl_cog_bioage.res, gbl_cog_x.res, 
+    mem.res, 
+    exf.res, 
+    lan.res, 
+    vsp.res
+  ) %>%
+  filter(effect == "fixed") %>%
+  select(outcome, model, term, estimate, std.error, p.value_fmt, sig) %>%
+  mutate(
+    term = if_else(
+      str_detect(term, ":"),
+      map_chr(str_split(term, ":"), ~ paste(sort(.x), collapse = ":")),
+      term
+    )
+  ) %>%
+  # Combine p.value_fmt and sig into one column
+  unite(p, c("p.value_fmt", "sig"), sep = " ") %>%
+  pivot_wider(
+    names_from   = model,
+    values_from  = c(estimate, std.error, p),
+    names_glue   = "{.value}_{model}"
+  ) %>%
+  mutate(
+    effect = ifelse(str_detect(term, "yrs"), "longitudinal", "baseline"), 
+    term = fct_relevel(term, 
+      "(Intercept)", "z_age_bl", "sexMale", "educ_catCollege", "educ_catGraduate", "apoee2+", "apoee4+",
+      "nk_cell_bl", "b_cell_bl", "cd4_t_cell_bl", "cd8_t_cell_bl", "monocyte_bl" , 
+      "z_tl_bl",  "z_dnam_bl", "z_mtcn_bl", "z_dnam_bl:z_tl_bl", "z_mtcn_bl:z_tl_bl", "z_dnam_bl:z_mtcn_bl", "z_dnam_bl:z_mtcn_bl:z_tl_bl", 
+      "yrs_c", "yrs_c:z_age_bl", "apoee2+:yrs_c", "apoee4+:yrs_c", 
+      "yrs_c:z_tl_bl", "yrs_c:z_dnam_bl", "yrs_c:z_mtcn_bl", "yrs_c:z_mtcn_bl:z_tl_bl", "yrs_c:z_dnam_bl:z_mtcn_bl", "yrs_c:z_dnam_bl:z_tl_bl" , "yrs_c:z_dnam_bl:z_mtcn_bl:z_tl_bl"    
+      )                             
+  ) %>%
+  relocate(
+    outcome, term, effect, 
+    ends_with("_baseline"), 
+    ends_with("_TL"), 
+    ends_with("_CausAge"), 
+    ends_with("_mtDNAcn"), 
+    ends_with("_bioage"), 
+    ends_with("_mtDNAcnxTL"), 
+    ends_with("_mtDNAcnxDNAm"), 
+    ends_with("_DNAmxTL"), 
+    ends_with("_mtDNAcnxDNAmxTL")
+  ) %>%
+  arrange(outcome, effect, term)
+
+cog_bioage.out
+
+cog_bioage.out  %>%
+  write_csv(glue('results/cog_results_nocdr_{DATE}.csv'), na = "")
+
+```
+
+```{r}
+#| label: export_csf_results
+
+csf_res.out <- csf.res %>%
+  mutate(
+    sig = stars.pval(p.value), 
+    term = if_else(
+      str_detect(term, ":"),
+      map_chr(str_split(term, ":"), ~ paste(sort(.x), collapse = ":")),
+      term
+    ), 
+    term = fct_relevel(term, 
+      "(Intercept)", "age", "sex", 'apoee2+', "apoee4+", "b_cell", "cd4_t_cell", "cd8_t_cell", "nk_cell", "monocyte", 
+      "z_tl", "z_dnam", "z_mtcn", "z_dnam:z_mtcn", "z_mtcn:z_tl", "z_dnam:z_tl", "z_dnam:z_mtcn:z_tl"
+      )
+  ) %>%
+  # Combine p.value_fmt and sig into one column 
+  select(outcome, model, term, estimate, std.error, p.value_fmt, sig) %>%
+  unite(p, c("p.value_fmt", "sig"), sep = " ") %>%
+    pivot_wider(
+    names_from   = model,
+    values_from  = c(estimate, std.error, p),
+    names_glue   = "{.value}_{model}"
+  ) %>%
+  relocate(
+    outcome, term, 
+    ends_with("_baseline"), 
+    ends_with("_TL"), 
+    ends_with("_DNAm"), 
+    ends_with("_mtDNAcn"), 
+    ends_with("_bioage"), 
+    ends_with("_mtDNAcnxTL"), 
+    ends_with("_mtDNAcnxDNAm"), 
+    ends_with("_DNAmxTL"), 
+    ends_with("_mtDNAcnxDNAmxTL")
+  ) %>%
+  arrange(outcome, term)
+
+csf_res.out  %>%
+  write_csv(glue('results/csf_results_nocdr_{DATE}.csv'), na = "")
+
+```
+
+
+```{r}
+#| label: export_mri_results
+
+mri_res.out <- mri.res %>%
+  mutate(
+    sig = stars.pval(p.value), 
+    term = if_else(
+      str_detect(term, ":"),
+      map_chr(str_split(term, ":"), ~ paste(sort(.x), collapse = ":")),
+      term
+    ), 
+    term = fct_relevel(term, 
+      "(Intercept)", "age_bl", 'months', "sex", 'apoee2+', "apoee4+", 
+      "b_cell_bl", "cd4_t_cell_bl", "cd8_t_cell_bl", "nk_cell_bl", "monocyte_bl", 
+      "EstimatedTotalIntraCranialVol_combat", 
+      # "PHC_ScannerBatchName.1ADNI2/GO_3.0", "PHC_ScannerBatchName.1ADNI3_3.0_GE", "PHC_ScannerBatchName.1ADNI3_3.0_Philips", "PHC_ScannerBatchName.1ADNI3_3.0_Siemens", 
+      "z_tl_bl", "z_dnam_bl", "z_mtcn_bl", "z_dnam_bl:z_mtcn_bl", "z_mtcn_bl:z_tl_bl", "z_dnam_bl:z_tl_bl", "z_dnam_bl:z_mtcn_bl:z_tl_bl",
+      )
+  ) %>%
+  # Combine p.value_fmt and sig into one column 
+  select(outcome, model, term, estimate, std.error, p.value_fmt, sig) %>%
+  unite(p, c("p.value_fmt", "sig"), sep = " ") %>%
+    pivot_wider(
+    names_from   = model,
+    values_from  = c(estimate, std.error, p),
+    names_glue   = "{.value}_{model}"
+  ) %>%
+  relocate(
+    outcome, term, 
+    ends_with("_baseline"), 
+    ends_with("_TL"), 
+    ends_with("_DNAm"), 
+    ends_with("_mtDNAcn"), 
+    ends_with("_bioage"), 
+    ends_with("_mtDNAcnxTL"), 
+    ends_with("_mtDNAcnxDNAm"), 
+    ends_with("_DNAmxTL"), 
+    ends_with("_mtDNAcnxDNAmxTL")
+  ) %>%
+  arrange(outcome, term)
+
+mri_res.out  %>%
+  write_csv(glue('results/mri_results_nocdr_{DATE}.csv'), na = "")
+
+```
+
