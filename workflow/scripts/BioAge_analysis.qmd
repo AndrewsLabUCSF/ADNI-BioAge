@@ -1160,6 +1160,7 @@ joint_coeff.p <- cowplot::plot_grid(
 joint_coeff.p
 
 ggsave(glue("results/plots/coeff_joint_{DATE}.png"), plot = joint_coeff.p , width = 7.5, height = 3.2, units = 'in', dpi = 300)
+ggsave(glue("results/plots/coeff_joint_poster_{DATE}.png"), plot = joint_coeff.p , width = 9, height = 4, units = 'in', dpi = 300)
 
 ## Interaction 
 ## Joint
@@ -1327,6 +1328,114 @@ plotGG(
 ## ─────────────────────────────────────────────────────────────
 pageGuideHide()
 dev.off()
+
+
+```
+
+### Plots - Presentation
+
+```{r}
+#| label: presentation plot
+
+## Joint
+joint_pres.p <- ggplot(filter(res.df, model == 'Joint'), aes(x = Std_Coefficient, y = fct_rev(outcome), colour = sig)) + 
+  facet_grid(rows = vars(endophenotype),   
+             cols  = vars(term),
+             scales = "free_y", space = "free_y") +
+  geom_vline(xintercept = 0, linetype = 2, colour = "grey70") +
+  geom_pointrange(aes(xmin = CI_low, xmax = CI_high),
+                  position = position_dodge(width = .6),
+                  fatten   = 1.3) +
+  scale_colour_manual(values = c('#052049', '#C42882')) + 
+  labs(x = "Standardised β (95% CI)",
+      y = NULL, colour = NULL) +
+  theme_bw(base_size = 14) + 
+  theme(
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold"),
+      legend.position = "none", 
+      plot.margin = margin(0, 0, 0, 0)
+    )
+
+ggsave(glue("results/plots/coeff_joint_poster_{DATE}.png"), plot = joint_pres.p , width = 9, height = 4, units = 'in', dpi = 300)
+
+## Interaction 
+## Joint
+int_pres.p <- ggplot(filter(res.df, model == 'Interaction'), aes(x = Std_Coefficient, y = fct_rev(outcome), colour = sig)) + 
+  facet_grid(rows = vars(endophenotype),   
+             cols  = vars(fct_rev(term)),
+             scales = "free_y", space = "free_y") +
+  geom_vline(xintercept = 0, linetype = 2, colour = "grey70") +
+  geom_pointrange(aes(xmin = CI_low, xmax = CI_high),
+                  position = position_dodge(width = .6),
+                  fatten   = 1.3) +
+  scale_colour_manual(values = c('#052049', '#C42882')) + 
+  labs(x = "Standardised β (95% CI)",
+      y = NULL, colour = NULL) +
+  theme_bw(base_size = 14) + 
+  theme(
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold"),
+      legend.position = "none", 
+    #  plot.margin = margin(0, 0, 0, 0)
+    )
+
+ggsave(glue("results/plots/coeff_inter_poster_{DATE}.png"), plot = int_pres.p , width = 9, height = 4, units = 'in', dpi = 300)
+
+
+
+gbl_cog_mtcnxtl_pres.p <- plot_model(fitlmer.04b, type = "pred", terms = c("z_mtcn_bl", "z_tl_bl")) + 
+  labs(
+    x = "mtDNAcn", 
+    y = "Global Cognition"
+  ) + 
+  guides(color = guide_legend(title = "TL")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 14), 
+   #   plot.margin = margin(0, 0, 0, 0)
+  )
+
+ggsave(glue("results/plots/inter_gbl_cog_mtcnxtl_pres_{DATE}.png"), plot = gbl_cog_mtcnxtl_pres.p , width = 4, height = 4, units = 'in', dpi = 300)
+
+lan_dnam_mtcn_pres.p <- plot_model(fitlmer.lan_dnam_mtcn, type = "pred", terms = c("z_mtcn_bl", "z_dnam_bl")) + 
+  labs(
+    x = "mtDNAcn", 
+    y = "Language Ability"
+  ) + 
+  guides(color = guide_legend(title = "DNAm")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 8), 
+      plot.margin = margin(0, 0, 0, 0)
+  )
+
+ggsave(glue("results/plots/inter_lan_dnam_mtcn_pres_{DATE}.png"), plot = lan_dnam_mtcn_pres.p , width = 4, height = 4, units = 'in', dpi = 300)
+
+
+gmvol_mtcnxdnamxtl_pres.p <- plot_model(gmvol_mtcnxdnamxtl.res_p, type = "pred", terms = c("z_mtcn_bl", "z_dnam_bl", "TL")) + 
+  labs(
+    x = "mtDNAcn", 
+    y = "GM Vol."
+  ) + 
+  guides(color = guide_legend(title = "DNAm")) + 
+  theme_bw() + 
+  theme(
+    plot.title = element_blank(),
+    legend.position = 'bottom', 
+    legend.text = element_text(size = 14),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"), 
+    #plot.margin = margin(0, 0, 0, 0)
+  )
+
+gmvol_mtcnxdnamxtl_pres.p
+
+ggsave(glue("results/plots/inter_gmvol_mtcnxdnamxtl_pres_{DATE}.png"), plot = gmvol_mtcnxdnamxtl_pres.p , width = 9, height = 4, units = 'in', dpi = 300)
 
 
 ```
