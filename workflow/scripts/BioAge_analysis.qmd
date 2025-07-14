@@ -19,6 +19,7 @@ library(sjPlot)
 library(gtools)
 setwd("~/gitcode/DNAm")
 `%nin%` = negate(`%in%`) 
+#DATE = '20250707'
 DATE = ymd(Sys.Date()) %>% str_replace_all("-", "")
 
 ## Extract tidy results and standardized coefficents
@@ -40,28 +41,28 @@ get_std_res <- function(model) {
 ## Import 
 #| include: false 
 
-# adni <- read_csv('intermediate/adni.csv') %>%
-#  mutate(
-#    apoe = fct_relevel(apoe, "e3/e3"), 
-#    educ_cat = fct_relevel(educ_cat, 'HighSchool')
-#  )
+adni <- read_csv(glue('intermediate/adni_{DATE}.csv')) %>%
+  mutate(
+    apoe = fct_relevel(apoe, "e3/e3"), 
+    educ_cat = fct_relevel(educ_cat, 'HighSchool')
+  )
 
 cog.df <- adni %>% 
   group_by(RID) %>%
   slice_min(PHC_Visit) %>%
   ungroup()
 
-# mri.df <- read_csv('intermediate/mri.csv') %>%
-#  mutate(
-#    apoe = fct_relevel(apoe, "e3/e3"), 
-#    educ_cat = fct_relevel(educ_cat, 'HighSchool')
-#  )
+mri.df <- read_csv(glue('intermediate/mri_{DATE}.csv')) %>%
+ mutate(
+   apoe = fct_relevel(apoe, "e3/e3"), 
+   educ_cat = fct_relevel(educ_cat, 'HighSchool')
+ )
 
-# flbm.df <- read_csv('intermediate/flbm.csv') %>%
-#  mutate(
-#    apoe = fct_relevel(apoe, "e3/e3"), 
-#    educ_cat = fct_relevel(educ_cat, 'HighSchool')
-#  )
+flbm.df <- read_csv(glue('intermediate/flbm_{DATE}.csv')) %>%
+ mutate(
+   apoe = fct_relevel(apoe, "e3/e3"), 
+   educ_cat = fct_relevel(educ_cat, 'HighSchool')
+ )
 
 adni %>% 
   select(RID, gbl_cog, yrs_c, nk_cell, z_dnam_bl)
@@ -1256,7 +1257,7 @@ gmvol_mtcnxdnamxtl.p <- plot_model(gmvol_mtcnxdnamxtl.res_p, type = "pred", term
 ## 1.  Create a page (all units are inches)
 ## ─────────────────────────────────────────────────────────────
 int_width = 7.5
-int_height = 10
+int_height = 9.5
 
 png(glue("results/plots/coeff_interactions_{DATE}.png"),  width = int_width, height = int_height, units = "in", res = 300)
 

@@ -41,7 +41,7 @@ get_std_res <- function(model) {
 ## Import 
 #| include: false 
 
-adni <- read_csv('intermediate/adni.csv') %>%
+adni <- read_csv(glue('intermediate/adni_{DATE}.csv')) %>%
   mutate(
     apoe = fct_relevel(apoe, "e3/e3"), 
     educ_cat = fct_relevel(educ_cat, 'HighSchool')
@@ -52,17 +52,17 @@ cog.df <- adni %>%
   slice_min(PHC_Visit) %>%
   ungroup()
 
-mri.df <- read_csv('intermediate/mri.csv') %>%
-  mutate(
-    apoe = fct_relevel(apoe, "e3/e3"), 
-    educ_cat = fct_relevel(educ_cat, 'HighSchool')
-  )
+mri.df <- read_csv(glue('intermediate/mri_{DATE}.csv')) %>%
+ mutate(
+   apoe = fct_relevel(apoe, "e3/e3"), 
+   educ_cat = fct_relevel(educ_cat, 'HighSchool')
+ )
 
-flbm.df <- read_csv('intermediate/flbm.csv') %>%
-  mutate(
-    apoe = fct_relevel(apoe, "e3/e3"), 
-    educ_cat = fct_relevel(educ_cat, 'HighSchool')
-  )
+flbm.df <- read_csv(glue('intermediate/flbm_{DATE}.csv')) %>%
+ mutate(
+   apoe = fct_relevel(apoe, "e3/e3"), 
+   educ_cat = fct_relevel(educ_cat, 'HighSchool')
+ )
 
 adni %>% 
   select(RID, gbl_cog, yrs_c, nk_cell, z_dnam_bl)
