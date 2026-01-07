@@ -19,8 +19,8 @@ library(sjPlot)
 library(gtools)
 setwd("~/gitcode/DNAm")
 `%nin%` = negate(`%in%`) 
-#DATE = '20250707'
-DATE = ymd(Sys.Date()) %>% str_replace_all("-", "")
+DATE = '20250713'
+# DATE = ymd(Sys.Date()) %>% str_replace_all("-", "")
 
 ## Extract tidy results and standardized coefficents
 get_std_res <- function(model) {
@@ -1337,11 +1337,26 @@ dev.off()
 ```{r}
 #| label: presentation plot
 
+res.df <- res.df %>% 
+  mutate(
+    endophenotype = fct_recode(endophenotype,
+      `BL Cog`        = "Baseline Cog.",
+      `Longit. Cog`      = "Longitudinal Cog.",
+      CSF             = "CSF",
+      MRI             = "MRI"
+    ), 
+    term = fct_relabel(term,      # keeps the existing level order
+                       ~ str_replace_all(.x, "x", " x ") |>  # add spaces
+                         str_squish()                       # trim any doubles
+    )
+  )
+
 ## Joint
 joint_pres.p <- ggplot(filter(res.df, model == 'Joint'), aes(x = Std_Coefficient, y = fct_rev(outcome), colour = sig)) + 
   facet_grid(rows = vars(endophenotype),   
              cols  = vars(term),
-             scales = "free_y", space = "free_y") +
+             scales = "free_y", space = "free_y", 
+      ) +
   geom_vline(xintercept = 0, linetype = 2, colour = "grey70") +
   geom_pointrange(aes(xmin = CI_low, xmax = CI_high),
                   position = position_dodge(width = .6),
@@ -1357,7 +1372,9 @@ joint_pres.p <- ggplot(filter(res.df, model == 'Joint'), aes(x = Std_Coefficient
       plot.margin = margin(0, 0, 0, 0)
     )
 
-ggsave(glue("results/plots/coeff_joint_poster_{DATE}.png"), plot = joint_pres.p , width = 9, height = 4, units = 'in', dpi = 300)
+joint_pres.p
+
+ggsave(glue("results/plots/coeff_joint_pres_{DATE}.png"), plot = joint_pres.p , width = 9, height = 4, units = 'in', dpi = 300)
 
 ## Interaction 
 ## Joint
@@ -1377,8 +1394,11 @@ int_pres.p <- ggplot(filter(res.df, model == 'Interaction'), aes(x = Std_Coeffic
       strip.background = element_blank(),
       strip.text = element_text(face = "bold"),
       legend.position = "none", 
+      strip.clip = "off"
     #  plot.margin = margin(0, 0, 0, 0)
     )
+
+int_pres.p
 
 ggsave(glue("results/plots/coeff_inter_poster_{DATE}.png"), plot = int_pres.p , width = 9, height = 4, units = 'in', dpi = 300)
 
