@@ -17,11 +17,14 @@ library(lme4)
 library(lmerTest)
 library(sjPlot)
 library(gtsummary)
-setwd("~/gitcode/DNAm")
-`%nin%` = negate(`%in%`) 
-DATE = ymd(Sys.Date()) %>% str_replace_all("-", "")
+#setwd("~/gitcode/DNAm")
+setwd("~/Library/CloudStorage/Box-Box/DNAm")
+`%nin%` = negate(`%in%`)
+DATE = '20260224'
+#DATE = ymd(Sys.Date()) %>% str_replace_all("-", "")
 theme_gtsummary_compact()
 ```
+
 
 ## Munge
 
@@ -30,7 +33,8 @@ theme_gtsummary_compact()
 ```{r}
 merge.raw <- read_csv("resources/ADNI/ADNIMERGE_25Sep2023.csv")
 cog.raw <- read_csv("resources/ADNI/ADSP-PHC/Assessment_Analyses/ADSP_ADNI_Cognition_Dec2023/ADSP_PHC_COGN_Dec2023.csv")
-  
+names(merge.raw)
+
 dx_bl <- filter(cog.raw, PHC_Visit == 1) %>% 
     mutate(
     dx_bl = case_when(
@@ -567,6 +571,7 @@ adni <- adni %>%
 
 ```
 
+
 ### NeuroImaging 
 ```{r}
 mri.df <- adni %>%
@@ -619,7 +624,7 @@ write_csv(flbm.df, glue('intermediate/flbm_{DATE}.csv'))
 
 ```
 
-## Descriptives 
+
 ### Table 1
 ```{r}
 ## Baseline 
@@ -636,6 +641,7 @@ adni_d <- adni %>%
     educ_cat = first(educ_cat),
     cdrsb = first(cdrsb_bl),
     dx = first(PHC_Diagnosis),
+    apoe = first(apoe), 
     TL = first(TL_BP_ADJ), 
     mtDNAcn = first(mtcn), 
     PhenoAge = first(PhenoAge), 
@@ -676,17 +682,21 @@ adni_d <- adni %>%
   left_join(select(flbm.df, RID, PHC_AB42, PHC_Tau, PHC_pTau))
 
 describe_distribution(adni_d)
-
+covars <- c("cohort", "age", "sex", "race", "educ_cat", "cdrsb", "apoe")
 ## GT-summary
 tbl1 <- adni_d %>% 
   select(-RID, -PHC_Visit) %>%
   tbl_summary(
     ., by = dx, 
     missing = "no",
+    missing_text = "Missing",
     statistic = list(
     all_continuous() ~ "{mean} ({sd})",
     all_categorical() ~ "{n} ({p}%)"
     ),
+  ) %>%
+  modify_table_body(~ .x %>%
+    dplyr::filter(!(row_type == "missing" & !variable %in% covars))
   ) %>%
   gtsummary::add_p(
     
@@ -785,14 +795,17 @@ summary(res_cor)
 
 main_corr.p <- summary(res_cor) %>% 
   plot() + 
+  labs(
+    subtitle = "* FDR-adjusted q < 0.05; ** q < 0.01; *** q < 0.001"
+  ) + 
     theme_bw(
-      base_size = 15,
+      base_size = 11,
     ) + 
     theme(
-      text = element_text(size = 10), 
+      text = element_text(size = 8), 
       axis.text.x = element_text(angle = 25, hjust = 1) 
     )
-main_corr.p
+main_corr.p 
 ggsave(glue("results/plots/main_corrplot_{DATE}.png"), plot = main_corr.p, width = 9, height = 4, units = 'in')
 ggsave(glue("results/plots/main_corrplot_{DATE}_paper.png"), plot = main_corr.p, width = 7, height = 4, units = 'in')
 
@@ -985,19 +998,178 @@ bioage_long.p
 ggsave("results/plots/bioage_long.png", plot = bioage_long.p, width = 9, height = 4, units = 'in')
 
 ```
+# Additionals
+```{r}
+mri_time_summary <- mri.df %>%
+  summarise(
+    mean_years = mean(months, na.rm = TRUE) / 12,
+    sd_years   = sd(months, na.rm = TRUE) / 12,
+    min_years  = min(months, na.rm = TRUE) / 12,
+    max_years  = max(months, na.rm = TRUE) / 12,
+    n          = n()
+  )
+
+mri_time_summary
+
+```
+
+```{r}
+
+sum(is.na(adni$PHC_AB42))
+sum(is.na(adni$PHC_Tau))
+sum(is.na(adni$PHC_pTau))
+names(fluid_bm.raw)
+```
+## CSF RAW outlier QC
+```{r}
+
+library(tidyverse)
+
+csf <- read_csv("resources/ADNI/ADSP-PHC/Biospecimen_Analyses/ADSP_PHC_CSF_Dec2023.csv")
+
+iqr_flag <- function(x, k = 1.5) {
+  q1 <- quantile(x, 0.25, na.rm = TRUE)
+  q3 <- quantile(x, 0.75, na.rm = TRUE)
+  iqr <- q3 - q1
+  (x < (q1 - k * iqr)) | (x > (q3 + k * iqr))
+}
+
+csf_out <- csf %>%
+  mutate(
+    out_ab42 = iqr_flag(AB42_RAW),
+    out_tau  = iqr_flag(Tau_RAW),
+    out_ptau = iqr_flag(pTau_RAW),
+    out_any  = out_ab42 | out_tau | out_ptau
+  )
+
+# sanity check that the column exists
+names(csf_out)
+
+csf_out %>%
+  filter(out_any) %>%
+  select(RID, SUBJID, PHASE, VISCODE, PHC_Visit, DRAWDATE, Platform,
+         AB42_RAW, Tau_RAW, pTau_RAW,
+         PHC_AB42, PHC_Tau, PHC_pTau,
+         out_ab42, out_tau, out_ptau) %>%
+  arrange(desc(Tau_RAW))  # or arrange(desc(pTau_RAW)), etc.
+  #head(25)
+sum(csf_out$out_ab42, na.rm = TRUE)
+sum(csf_out$out_tau,  na.rm = TRUE)
+sum(csf_out$out_ptau, na.rm = TRUE)
+sum(csf_out$out_any,  na.rm = TRUE)
+
+
+csf_out %>%
+  filter(out_any) %>%
+  summarise(
+    n_unique_RID = n_distinct(RID),
+    n_rows = n()
+  )
+csf_out %>%
+  filter(out_any) %>%
+  summarise(
+    mean_abs_phc_tau  = mean(abs(PHC_Tau), na.rm = TRUE),
+    max_abs_phc_tau   = max(abs(PHC_Tau), na.rm = TRUE),
+    mean_abs_phc_ptau = mean(abs(PHC_pTau), na.rm = TRUE),
+    max_abs_phc_ptau  = max(abs(PHC_pTau), na.rm = TRUE)
+  )
+
+```
+
+```{r}
+# 1) Do flagged rows have PHC values or are they NA?
+phc_missing_check <- csf_out %>%
+  filter(out_any) %>%
+  summarise(
+    n_flagged_rows = n(),
+    n_missing_PHC_AB42 = sum(is.na(PHC_AB42)),
+    n_missing_PHC_Tau  = sum(is.na(PHC_Tau)),
+    n_missing_PHC_pTau = sum(is.na(PHC_pTau)),
+    n_missing_any_PHC  = sum(is.na(PHC_AB42) | is.na(PHC_Tau) | is.na(PHC_pTau))
+  )
+
+phc_missing_check
+
+csf_flagged_82 <- csf_out %>%
+  filter(out_any) %>%
+  select(
+    RID, SUBJID, PHASE, VISCODE, PHC_Visit, DRAWDATE, Platform,
+    AB42_RAW, Tau_RAW, pTau_RAW,
+    PHC_AB42, PHC_Tau, PHC_pTau,
+    out_ab42, out_tau, out_ptau
+  ) %>%
+  arrange(desc(abs(PHC_Tau)))   # optional ordering
+nrow(csf_flagged_82)
+csf_flagged_82 %>%
+  summarise(
+    max_abs_PHC_AB42 = max(abs(PHC_AB42), na.rm = TRUE),
+    max_abs_PHC_Tau  = max(abs(PHC_Tau),  na.rm = TRUE),
+    max_abs_PHC_pTau = max(abs(PHC_pTau), na.rm = TRUE)
+  )
+```
 
 
 
 
 
+####test
+```{r}
+library(dplyr)
+library(readr)
 
+csf <- read_csv("resources/ADNI/ADSP-PHC/Biospecimen_Analyses/ADSP_PHC_CSF_Dec2023.csv")
 
+# 1) Create log10 variables (like adRutils::transform_log10)
+# Use log10(x) only for x > 0; otherwise set NA
+csf2 <- csf %>%
+  mutate(
+    log10_AB42 = if_else(AB42_RAW > 0, log10(AB42_RAW), NA_real_),
+    log10_Tau  = if_else(Tau_RAW  > 0, log10(Tau_RAW),  NA_real_),
+    log10_pTau = if_else(pTau_RAW > 0, log10(pTau_RAW), NA_real_)
+  )
 
+# 2) IQR flagger (same k=1.5 idea, but applied to log10 vars)
+iqr_flag <- function(x, k = 1.5) {
+  q1 <- quantile(x, 0.25, na.rm = TRUE)
+  q3 <- quantile(x, 0.75, na.rm = TRUE)
+  iqr <- q3 - q1
+  (x < (q1 - k * iqr)) | (x > (q3 + k * iqr))
+}
 
+csf3 <- csf2 %>%
+  mutate(
+    out_log10_AB42 = iqr_flag(log10_AB42),
+    out_log10_Tau  = iqr_flag(log10_Tau),
+    out_log10_pTau = iqr_flag(log10_pTau)
+  ) %>%
+  # 3) Replace outliers with NA (like replace_outliers_with_na)
+  mutate(
+    log10_AB42_qc = if_else(out_log10_AB42, NA_real_, log10_AB42),
+    log10_Tau_qc  = if_else(out_log10_Tau,  NA_real_, log10_Tau),
+    log10_pTau_qc = if_else(out_log10_pTau, NA_real_, log10_pTau)
+  )
 
+# Quick counts (how many values were NA'd per biomarker)
+csf3 %>%
+  summarise(
+    n_out_log10_AB42 = sum(out_log10_AB42, na.rm = TRUE),
+    n_out_log10_Tau  = sum(out_log10_Tau,  na.rm = TRUE),
+    n_out_log10_pTau = sum(out_log10_pTau, na.rm = TRUE),
+    n_out_any        = sum(out_log10_AB42 | out_log10_Tau | out_log10_pTau, na.rm = TRUE)
+  )
+```
 
+```{r}
 
-
+genetics_bl %>%
+  summarise(
+    n_total = n_distinct(RID),
+    n_tl    = sum(!is.na(tl_bl)),
+    n_dnam  = sum(!is.na(causage_bl)),
+    n_mtcn  = sum(!is.na(mtcn_bl)),
+    n_apoe  = sum(!is.na(apoe))
+  )
+```
 
 
 

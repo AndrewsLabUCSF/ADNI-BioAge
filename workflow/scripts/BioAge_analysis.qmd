@@ -17,9 +17,10 @@ library(lme4)
 library(lmerTest)
 library(sjPlot)
 library(gtools)
-setwd("~/gitcode/DNAm")
+#setwd("~/gitcode/DNAm")
+setwd("~/Library/CloudStorage/Box-Box/DNAm")
 `%nin%` = negate(`%in%`) 
-DATE = '20250713'
+DATE = '20260224'
 # DATE = ymd(Sys.Date()) %>% str_replace_all("-", "")
 
 ## Extract tidy results and standardized coefficents
@@ -36,6 +37,7 @@ get_std_res <- function(model) {
 }
 
 ```
+
 
 ```{r}
 ## Import 
@@ -66,6 +68,10 @@ flbm.df <- read_csv(glue('intermediate/flbm_{DATE}.csv')) %>%
 
 adni %>% 
   select(RID, gbl_cog, yrs_c, nk_cell, z_dnam_bl)
+names(adni)
+table(adni$htn, useNA = "ifany")
+summary(adni$bmi)
+table(adni$obesity, useNA = "ifany")
 ```
 
 ## Analysis
@@ -858,7 +864,17 @@ mri.res <- bind_rows(
       as.character(round(p.value, 3))),              # decimal (3 places)
     out = glue("{estimate} ({std.error}), p = {p.value_fmt}")
   ) 
-
+##### --- rename z_* terms to your preferred names (so downstream filters don't change)
+mri.res <- mri.res %>%
+  mutate(
+    term = dplyr::recode(
+      term,
+      z_mtcn_bl = "mtcn_bl",
+      z_dnam_bl = "causage_bl",
+      z_tl_bl   = "tl_bl"
+    )
+  )
+####
 mri.res %>%
   filter(term %in% c('mtcn_bl', 'causage_bl', 'tl_bl')) %>%
   filter(model %in% c('mtDNAcn', 'DNAm', 'TL'))  %>%
@@ -878,6 +894,24 @@ mri.res %>%
 ### Plots
 
 ```{r}
+
+#####error check Error in combine_vars():
+#! Faceting variables must have at least one value.
+#Run rlang::last_trace() to see where the error occurred.
+mri.res %>% count(model)
+
+mri.res %>%
+  filter(model == "bioage") %>%
+  count(term, sort = TRUE)
+
+mri.res %>%
+  filter(model == "bioage", term %in% c("mtcn_bl","causage_bl","tl_bl")) %>%
+  summarise(
+    n = n(),
+    n_outcome_non_na = sum(!is.na(outcome))
+  )
+##### model == "bioage" exists, term filter is wrong: filtered for mtcn_bl / causage_bl / tl_bl in your data they are z_mtcn_bl / z_dnam_bl / z_tl_bl
+
 mri_coef.p <- mri.res %>%
   filter(term %in% c('mtcn_bl', 'causage_bl', 'tl_bl')) %>%
   filter(model == 'bioage') %>%
@@ -909,7 +943,20 @@ ggsave(glue("results/plots/mri_bioage_{DATE}.png"), plot = mri_coef.p, width = 9
 
 
 ```{r}
-
+####
+plot_model_original <- sjPlot::plot_model
+plot_model <- function(model, ..., terms = NULL) {
+  if (!is.null(terms)) {
+    terms <- dplyr::recode(
+      terms,
+      causage_bl = "z_dnam_bl",
+      mtcn_bl    = "z_mtcn_bl",
+      tl_bl      = "z_tl_bl"
+    )
+  }
+  plot_model_original(model, ..., terms = terms)
+}
+####
 # Joint Modles 
 plot_model(cort_thk_bioage.res, type = "pred", terms = c("causage_bl"))
 plot_model(cort_thk_bioage.res, type = "pred", terms = c("mtcn_bl"))
@@ -936,7 +983,7 @@ cog_summary.res <- bind_rows(
     mem.res, 
     exf.res, 
     lan.res, 
-    vsp.res
+    vsp.res 
   ) %>% 
   mutate(
     endophenotype = 'Cognition',
@@ -958,7 +1005,7 @@ cog_summary.res <- bind_rows(
       TRUE ~ outcome
     ),
     term = if_else(
-      str_detect(term, ":"),
+      str_detect(term, ":"),         
       map_chr(str_split(term, ":"), ~ paste(sort(.x), collapse = ":")),
       term
     )
@@ -1079,7 +1126,109 @@ res.df <- res %>%
     ), 
     endophenotype = fct_relevel(endophenotype, 'Baseline Cog.', "Longitudinal Cog.")
   )
-  
+res.df
+```
+
+# multiple-testing
+```{r}
+# multiple-testing --------------------------------------------------------
+# Bonferroni within outcome domains (family-wise):
+#   CSF: 3 outcomes x 7 predictors = 21 tests
+#   MRI: 2 outcomes x 7 predictors = 14 tests
+#   Baseline Cog: 5 outcomes x 7 predictors = 35 tests
+#   Longitudinal Cog: 5 outcomes x 7 predictors = 35 tests
+#
+# Bonferroni-adjusted p per test:
+#   p_bonf = min(p.value * m, 1)
+
+alpha <- 0.05
+
+bonf_terms <- c(
+  "TL","DNAm","mtDNAcn",
+  "DNAmxTL","mtDNAcnxTL","mtDNAcnxDNAm","mtDNAcnxDNAmxTL"
+)
+
+# 1) family variable (domain)
+res.df <- res.df %>%
+  mutate(
+    outcome_bonf = case_when(
+      str_detect(endophenotype, regex("Baseline", ignore_case = TRUE)) ~ paste0("Baseline_", outcome),
+      str_detect(endophenotype, regex("Longitudinal", ignore_case = TRUE)) ~ paste0("Longitudinal_", outcome),
+      TRUE ~ outcome
+    ),
+    bonf_family = case_when(
+      str_detect(endophenotype, regex("Cog", ignore_case = TRUE)) ~ "Cognition",
+      str_detect(endophenotype, regex("CSF", ignore_case = TRUE)) ~ "CSF",
+      str_detect(endophenotype, regex("MRI", ignore_case = TRUE)) ~ "MRI",
+      TRUE ~ as.character(endophenotype)
+    )
+  )
+
+res.df %>%
+  group_by(bonf_family) %>%
+  summarise(
+    n_outcomes = n_distinct(outcome),
+    outcomes = paste(unique(outcome), collapse = ", "),
+    .groups = "drop"
+  ) %>%
+  print()
+# 2) remove exact duplicates BEFORE counting outcomes/tests
+res.df <- res.df %>%
+  distinct(bonf_family, outcome, model, term, .keep_all = TRUE)
+
+# 3) compute m per family = (# unique outcomes in that family) * (# predictors/terms)
+bonf_info <- res.df %>%
+  filter(term %in% bonf_terms) %>%
+  group_by(bonf_family) %>%
+  summarise(
+    n_outcomes = n_distinct(outcome),
+    m = n_outcomes * length(bonf_terms),
+    alpha_bonf = alpha / m,
+    .groups = "drop"
+  )
+
+print(bonf_info)
+
+# 4) apply Bonferroni per test
+res.df <- res.df %>%
+  left_join(bonf_info %>% select(bonf_family, m, alpha_bonf), by = "bonf_family") %>%
+  group_by(bonf_family) %>%
+  mutate(
+    p_bonf = if_else(
+      term %in% bonf_terms,
+      p.adjust(p.value, method = "bonferroni"),   # now per family because grouped
+      NA_real_
+    ),
+    sig_bonf = if_else(term %in% bonf_terms, p_bonf < alpha_bonf, NA)
+  ) %>%
+  ungroup()
+
+# 5) sanity checks (optional but useful)
+res.df %>%
+  summarise(
+    n = n(),
+    n_has_m = sum(!is.na(m)),
+    n_has_p_bonf = sum(!is.na(p_bonf)),
+    min_p = min(p.value, na.rm = TRUE),
+    min_p_bonf = min(p_bonf, na.rm = TRUE)
+  ) %>% print()
+
+res.df %>%
+  filter(!is.na(p_bonf)) %>%
+  arrange(p_bonf) %>%
+  select(endophenotype, outcome, model, term, p.value, m, p_bonf) %>%
+  print(n = 20)
+
+# 6) table that includes Bonferroni-adjusted p-values
+res.df %>%
+  select(endophenotype, model, outcome, term,
+         Std_Coefficient, CI_low, CI_high,
+         p.value, p_bonf) %>%
+  write_csv(glue("results/all_results_{DATE}_with_bonf.csv"), na = "")
+```
+
+
+```{r}
 res.p <- ggplot(res.df, aes(x = outcome, y = term, label = signif, color = signif)) +
   geom_text(size = 6, family = "Arial Unicode MS") +
   facet_grid(rows = vars(model), cols = vars(endophenotype), 
@@ -1101,11 +1250,13 @@ res.p <- ggplot(res.df, aes(x = outcome, y = term, label = signif, color = signi
   )
  
 res.p  
+res.df
 
 ggsave(glue("results/plots/results_{DATE}.png"), plot = res.p , width = 9, height = 4, units = 'in')
 
 
 ```
+
 
 ```{r}
 #| label: coefficent plot
@@ -1254,17 +1405,14 @@ gmvol_mtcnxdnamxtl.p <- plot_model(gmvol_mtcnxdnamxtl.res_p, type = "pred", term
   )
 
 
-## ─────────────────────────────────────────────────────────────
-## 1.  Create a page (all units are inches)
-## ─────────────────────────────────────────────────────────────
 int_width = 7.5
 int_height = 9.5
 
 png(glue("results/plots/coeff_interactions_{DATE}.png"),  width = int_width, height = int_height, units = "in", res = 300)
 
 pageCreate(
-  width  = int_width,   # “full-page width” (slightly narrower than US-letter 8.5")
-  height = int_height,    # choose a height that works for you
+  width  = int_width, 
+  height = int_height, 
 )
 
 ## Convenience variables -------------------------------------------------
@@ -1604,7 +1752,6 @@ mri_res.out <- mri.res %>%
       "(Intercept)", "age_bl", 'months', "sex", "cdrsb_bl", 'apoee2+', "apoee4+", 
       "b_cell_bl", "cd4_t_cell_bl", "cd8_t_cell_bl", "nk_cell_bl", "monocyte_bl", 
       "EstimatedTotalIntraCranialVol_combat", 
-      # "PHC_ScannerBatchName.1ADNI2/GO_3.0", "PHC_ScannerBatchName.1ADNI3_3.0_GE", "PHC_ScannerBatchName.1ADNI3_3.0_Philips", "PHC_ScannerBatchName.1ADNI3_3.0_Siemens", 
       "z_tl_bl", "z_dnam_bl", "z_mtcn_bl", "z_dnam_bl:z_mtcn_bl", "z_mtcn_bl:z_tl_bl", "z_dnam_bl:z_tl_bl", "z_dnam_bl:z_mtcn_bl:z_tl_bl",
       )
   ) %>%
@@ -1632,6 +1779,711 @@ mri_res.out <- mri.res %>%
 
 mri_res.out  %>%
   write_csv(glue('results/mri_results_{DATE}.csv'), na = "")
+
+```
+
+#Additionals
+```{r}
+all.vars(formula(fitlmer.01))
+all.vars(formula(fitlmer.03))
+all.vars(formula(ab42_bioage.res))
+all.vars(formula(cort_thk_bioage.res))
+all.vars(formula(gmvol_bioage.res))
+# ---- Missingness check (complete-case vs imputation) ----
+count_missing <- function(df, vars){
+  tibble(variable = vars) %>%
+    mutate(n_missing = map_int(vars, ~ sum(is.na(df[[.x]]))))
+}
+vars_f01 <- all.vars(formula(fitlmer.01))
+vars_f01
+
+missing_f01 <- count_missing(adni, vars_f01)
+missing_f01
+
+vars_f03 <- all.vars(formula(fitlmer.03))
+vars_f03
+
+missing_f03 <- count_missing(adni, vars_f03)
+missing_f03
+
+vars_ab42 <- all.vars(formula(ab42_bioage.res))
+vars_ab42
+
+missing_ab42 <- count_missing(flbm.df, vars_ab42)
+missing_ab42
+
+vars_cort <- all.vars(formula(cort_thk_bioage.res))
+vars_cort
+
+missing_cort <- count_missing(mri.df, vars_cort)
+missing_cort
+
+vars_gm <- all.vars(formula(gmvol_bioage.res))
+vars_gm
+
+missing_gm <- count_missing(mri.df, vars_gm)
+missing_gm
+```
+# Sensitivity
+```{r}
+#| eval: !isFALSE(getOption("run_sens", FALSE))
+# Sensitivity
+# ============================================================
+# Sensitivity: cardiometabolic adjustment (BMI + HTN)
+# Mirrors PRIMARY model grid (TL-only, DNAm-only, mtDNAcn-only,
+# Joint, 2-way interactions, 3-way) + adds bmi + htn
+# Collect tidy outputs + export supplementary CSV + Excel
+# ============================================================
+
+library(tidyverse)
+library(glue)
+library(lme4)
+library(lmerTest)
+library(broom)
+library(broom.mixed)
+library(easystats)
+library(purrr)
+library(openxlsx)
+
+
+# helpers
+
+paste_cov <- function(x) paste(x, collapse = " + ")
+adni <- adni %>%
+  left_join(bmi_htn_by_rid, by = "RID")
+collect_model <- function(model, domain, outcome, analysis, model_label) {
+
+  td <- if (inherits(model, "merMod")) {
+    broom.mixed::tidy(model, effects = "fixed", conf.int = TRUE)
+  } else {
+    broom::tidy(model, conf.int = TRUE)
+  }
+
+  std <- tryCatch({
+    sp <- easystats::standardize_parameters(model, method = "refit") %>% as_tibble()
+
+    # robust-ish mapping across easystats versions
+    sp %>%
+      transmute(
+        term = .data$Parameter,
+        Std_Coefficient = .data$Std_Coefficient,
+        CI_low  = dplyr::coalesce(.data$CI_low,  .data$CI_low.Std_Coefficient,  NA_real_),
+        CI_high = dplyr::coalesce(.data$CI_high, .data$CI_high.Std_Coefficient, NA_real_)
+      )
+  }, error = function(e) {
+    tibble(
+      term = td$term,
+      Std_Coefficient = NA_real_,
+      CI_low = NA_real_,
+      CI_high = NA_real_
+    )
+  })
+
+  td %>%
+    left_join(std, by = "term") %>%
+    mutate(
+      domain = domain,
+      outcome = outcome,
+      analysis = analysis,
+      model_label = model_label
+    ) %>%
+    relocate(domain, outcome, analysis, model_label)
+}
+
+
+# 1) Outcomes
+
+outcomes_cog <- c("gbl_cog", "PHC_MEM", "PHC_EXF", "PHC_LAN", "PHC_VSP")
+csf_outcomes  <- c("PHC_AB42", "PHC_Tau", "PHC_pTau")
+mri_outcomes  <- c("cort_thk_volwt", "gm_vol")
+
+
+# 2) Covariates (PRIMARY + bmi + htn)
+
+cells_bl  <- c("nk_cell_bl","b_cell_bl","cd4_t_cell_bl","cd8_t_cell_bl","monocyte_bl")
+cells_csf <- c("nk_cell","b_cell","cd4_t_cell","cd8_t_cell","monocyte")
+
+cog_base_cov_sens <- c(
+  "z_age_bl","sex","educ_cat","cdrsb_bl","apoe",
+  cells_bl,
+  "bmi","htn"
+)
+
+# IMPORTANT: do NOT include yrs_c here because marker parts will add it
+cog_lt_cov_terms_sens <- c(
+  "z_age_bl", "z_age_bl:yrs_c",
+  "sex",
+  "educ_cat",
+  "cdrsb_bl", "cdrsb_bl:yrs_c",
+  "apoe", "apoe:yrs_c",
+  cells_bl,
+  "bmi", "htn"
+)
+
+csf_cov_sens <- c("age","sex","cdrsb","apoe", cells_csf, "bmi","htn")
+
+mri_cov_sens <- c("age_bl","sex","cdrsb_bl","apoe","months", cells_bl, "bmi","htn")
+mri_cov_gm_sens <- c(mri_cov_sens, "EstimatedTotalIntraCranialVol_combat")
+
+
+# 3) Model grid (mirrors PRIMARY)
+
+model_specs_bl <- list(
+  TL_only     = "z_tl_bl",
+  DNAm_only   = "z_dnam_bl",
+  mtDNAcn_only= "z_mtcn_bl",
+  Joint       = "z_tl_bl + z_dnam_bl + z_mtcn_bl",
+  TL_x_DNAm   = "z_tl_bl * z_dnam_bl",
+  TL_x_mtDNA  = "z_tl_bl * z_mtcn_bl",
+  DNAm_x_mtDNA= "z_dnam_bl * z_mtcn_bl",
+  Three_way   = "z_mtcn_bl * z_tl_bl * z_dnam_bl"
+)
+
+# for longitudinal, always include time and marker*time
+model_specs_lt <- list(
+  TL_only      = "yrs_c + z_tl_bl*yrs_c",
+  DNAm_only    = "yrs_c + z_dnam_bl*yrs_c",
+  mtDNAcn_only = "yrs_c + z_mtcn_bl*yrs_c",
+  Joint        = "yrs_c + z_tl_bl*yrs_c + z_dnam_bl*yrs_c + z_mtcn_bl*yrs_c",
+  TL_x_DNAm    = "yrs_c + (z_tl_bl * z_dnam_bl) * yrs_c",
+  TL_x_mtDNA   = "yrs_c + (z_tl_bl * z_mtcn_bl) * yrs_c",
+  DNAm_x_mtDNA = "yrs_c + (z_dnam_bl * z_mtcn_bl) * yrs_c",
+  Three_way    = "yrs_c + (z_mtcn_bl * z_tl_bl * z_dnam_bl) * yrs_c"
+)
+
+# CSF uses non-_bl marker names 
+model_specs_csf <- list(
+  TL_only      = "z_tl",
+  DNAm_only    = "z_dnam",
+  mtDNAcn_only = "z_mtcn",
+  Joint        = "z_tl + z_dnam + z_mtcn",
+  TL_x_DNAm    = "z_tl * z_dnam",
+  TL_x_mtDNA   = "z_tl * z_mtcn",
+  DNAm_x_mtDNA = "z_dnam * z_mtcn",
+  Three_way    = "z_mtcn * z_tl * z_dnam"
+)
+
+# MRI uses _bl marker names
+model_specs_mri <- model_specs_bl
+
+
+# 4) Cohort-specific sensitivity datasets
+
+adni_sens <- adni %>%
+  filter(!is.na(bmi), !is.na(htn))
+
+# baseline row per RID: UPDATE to match baseline definition
+bmi_htn_by_rid <- adni %>%
+  group_by(RID) %>%
+  slice_min(PHC_Visit, with_ties = FALSE) %>% 
+  ungroup() %>%
+  select(RID, bmi, htn)
+
+mri_sens.df <- mri.df %>%
+  left_join(bmi_htn_by_rid, by = "RID") %>%
+  filter(!is.na(bmi), !is.na(htn))
+
+flbm_sens.df <- flbm.df %>%
+  left_join(bmi_htn_by_rid, by = "RID") %>%
+  filter(!is.na(bmi), !is.na(htn))
+
+
+# 5) Fit sensitivity models (full grid)
+
+
+# 5A) Cognition baseline LMs (all outcomes x all specs)
+lm_sens_cog <- crossing(outcome = outcomes_cog, spec = names(model_specs_bl)) %>%
+  mutate(
+    model = map2(outcome, spec, ~{
+      marker_part <- model_specs_bl[[.y]]
+      fml <- as.formula(paste0(.x, " ~ ", marker_part, " + ", paste_cov(cog_base_cov_sens)))
+      lm(fml, data = adni_sens)
+    })
+  )
+
+# 5B) Cognition longitudinal LMMs (all outcomes x all specs)
+lmer_sens_cog <- crossing(outcome = outcomes_cog, spec = names(model_specs_lt)) %>%
+  mutate(
+    model = map2(outcome, spec, ~{
+      marker_part <- model_specs_lt[[.y]]
+      fml <- as.formula(paste0(
+        .x, " ~ ",
+        marker_part, " + ",
+        paste_cov(cog_lt_cov_terms_sens), " + ",
+        "(1 + yrs_c | RID)"
+      ))
+      lmer(
+        fml,
+        data = adni_sens,
+        REML = FALSE,
+        control = lmerControl(optimizer = "Nelder_Mead")
+      )
+    })
+  )
+
+# 5C) CSF LMs (all outcomes x all specs)
+lm_sens_csf <- crossing(outcome = csf_outcomes, spec = names(model_specs_csf)) %>%
+  mutate(
+    model = map2(outcome, spec, ~{
+      marker_part <- model_specs_csf[[.y]]
+      fml <- as.formula(paste0(.x, " ~ ", marker_part, " + ", paste_cov(csf_cov_sens)))
+      lm(fml, data = flbm_sens.df)
+    })
+  )
+
+# 5D) MRI LMs (each outcome x all specs; handle GM ICV cov)
+lm_sens_mri <- crossing(outcome = mri_outcomes, spec = names(model_specs_mri)) %>%
+  mutate(
+    model = map2(outcome, spec, ~{
+      marker_part <- model_specs_mri[[.y]]
+      covs <- if (.x == "gm_vol") mri_cov_gm_sens else mri_cov_sens
+      fml <- as.formula(paste0(.x, " ~ ", marker_part, " + ", paste_cov(covs)))
+      lm(fml, data = mri_sens.df)
+    })
+  )
+
+
+# 6) Collect results
+
+sens_all <- bind_rows(
+  pmap_dfr(list(lm_sens_cog$model, lm_sens_cog$outcome, lm_sens_cog$spec),
+           ~collect_model(..1, "Cognition", ..2, "baseline_LM", ..3)),
+  pmap_dfr(list(lmer_sens_cog$model, lmer_sens_cog$outcome, lmer_sens_cog$spec),
+           ~collect_model(..1, "Cognition", ..2, "longitudinal_LMM", ..3)),
+  pmap_dfr(list(lm_sens_csf$model, lm_sens_csf$outcome, lm_sens_csf$spec),
+           ~collect_model(..1, "CSF", ..2, "baseline_LM", ..3)),
+  pmap_dfr(list(lm_sens_mri$model, lm_sens_mri$outcome, lm_sens_mri$spec),
+           ~collect_model(..1, "MRI", ..2, "baseline_LM", ..3))
+) %>%
+  relocate(domain, outcome, analysis, model_label)
+
+
+
+
+# 7) Export Supplementary CSV (unstandardized estimates)
+
+# normalize interaction terms so a:b and b:a become identical
+norm_term <- function(t) {
+  if (!grepl(":", t, fixed = TRUE)) return(t)
+  parts <- strsplit(t, ":", fixed = TRUE)[[1]]
+  paste(sort(parts), collapse=":")
+}
+
+sens_supp <- sens_all %>%
+  mutate(
+    # keep original if you want it
+    term_raw = term,
+
+    # normalized term used everywhere downstream
+    term = vapply(term, norm_term, character(1)),
+
+    sig = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01  ~ "**",
+      p.value < 0.05  ~ "*",
+      TRUE ~ ""
+    )
+  ) %>%
+  select(domain, outcome, analysis, model_label,
+         term, term_raw,
+         estimate, std.error, statistic, p.value,
+         conf.low, conf.high, sig)
+
+write_csv(sens_supp, glue("results/sensitivity_cardiometabolic_{DATE}.csv"), na = "")
+
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(openxlsx)
+
+DATE <- format(Sys.Date(), "%Y%m%d")
+dir.create("results", showWarnings = FALSE, recursive = TRUE)
+
+# =========================
+# 1) TERM LABELS (canonical only)
+# =========================
+term_keep <- c(
+  "(Intercept)" = "Intercept",
+  "z_age_bl" = "Age",
+  "age" = "Age",
+  "age_bl" = "Age",
+  "sex" = "Sex",
+
+  "educ_catHighSchool" = "Education - High School",
+  "educ_catCollege" = "Education - College",
+  "educ_catGraduate" = "Education - Graduate",
+  "educ_cat" = "Education",
+
+  "cdrsb_bl" = "CDR-SB",
+  "cdrsb" = "CDR-SB",
+
+"apoee2+" = "APOE e2+",
+"apoee4+" = "APOE e4+",
+"apoee2+:yrs_c" = "APOE e2+ x Years",
+"apoee4+:yrs_c" = "APOE e4+ x Years",
+"sexMale" = "Sex (Male)",
+  "bmi" = "BMI",
+  "htn" = "Hypertension",
+
+  "nk_cell_bl" = "NK Cells",
+  "b_cell_bl" = "B Cells",
+  "cd4_t_cell_bl" = "CD4+ T cells",
+  "cd8_t_cell_bl" = "CD8+ T cells",
+  "monocyte_bl" = "Monocytes",
+
+  "nk_cell" = "NK Cells",
+  "b_cell" = "B Cells",
+  "cd4_t_cell" = "CD4+ T cells",
+  "cd8_t_cell" = "CD8+ T cells",
+  "monocyte" = "Monocytes",
+
+  "EstimatedTotalIntraCranialVol_combat" = "Intracranial Volume",
+
+  "z_tl_bl" = "TL",
+  "z_dnam_bl" = "DNAm",
+  "z_mtcn_bl" = "mtDNAcn",
+
+  "z_tl" = "TL",
+  "z_dnam" = "DNAm",
+  "z_mtcn" = "mtDNAcn",
+
+  # 2-way interactions (canonical sorted)
+  "z_dnam_bl:z_tl_bl" = "DNAm x TL",
+  "z_mtcn_bl:z_tl_bl" = "mtDNAcn x TL",
+  "z_dnam_bl:z_mtcn_bl" = "DNAm x mtDNAcn",
+
+  "z_dnam:z_tl" = "DNAm x TL",
+  "z_mtcn:z_tl" = "mtDNAcn x TL",
+  "z_dnam:z_mtcn" = "DNAm x mtDNAcn",
+
+  # 3-way interactions (canonical sorted)
+  "z_dnam_bl:z_mtcn_bl:z_tl_bl" = "DNAm x mtDNAcn x TL",
+  "z_dnam:z_mtcn:z_tl" = "DNAm x mtDNAcn x TL",
+
+  "yrs_c" = "Years",
+  "months" = "Months"
+)
+
+
+model_order <- c(
+  "TL","CausAge","mtDNAcn","Joint",
+  "mtDNAcn x TL","mtDNAcn x DNAm","DNAm x TL",
+  "mtDNAcn x DNAm x TL"
+)
+marker_terms <- c(
+  "TL",
+  "DNAm",
+  "mtDNAcn",
+  "DNAm x TL",
+  "mtDNAcn x TL",
+  "DNAm x mtDNAcn",
+  "DNAm x mtDNAcn x TL"
+)
+
+baseline_terms <- c(
+  "(Intercept)","z_age_bl","age","sex",
+  "educ_catHighSchool","educ_catCollege","educ_catGraduate","educ_cat",
+  "cdrsb_bl","cdrsb", "sexMale",
+"apoee2+","apoee4+",
+  "bmi","htn",
+  "nk_cell_bl","b_cell_bl","cd4_t_cell_bl","cd8_t_cell_bl","monocyte_bl",
+  "z_tl_bl","z_dnam_bl","z_mtcn_bl",
+  "z_dnam_bl:z_tl_bl","z_mtcn_bl:z_tl_bl","z_dnam_bl:z_mtcn_bl",
+  "z_dnam_bl:z_mtcn_bl:z_tl_bl"
+)
+
+long_terms <- c(
+  "yrs_c","months",
+  "z_age_bl","age","cdrsb_bl","cdrsb","apoee2+","apoee4+",
+"apoee2+:yrs_c","apoee4+:yrs_c",
+  "bmi","htn",
+  "z_tl_bl","z_dnam_bl","z_mtcn_bl",
+  "z_dnam_bl:z_tl_bl","z_mtcn_bl:z_tl_bl","z_dnam_bl:z_mtcn_bl",
+  "z_dnam_bl:z_mtcn_bl:z_tl_bl"
+)
+unique(sens_supp$term) %>% sort()
+
+table_sens <- sens_supp %>%
+  filter(term %in% names(term_keep)) %>%
+  mutate(
+    analysis = recode(analysis,
+      baseline_LM = "Baseline",
+      longitudinal_LMM = "Longitudinal"
+    ),
+    outcome = recode(outcome,
+      gbl_cog = "Global Cognition",
+      PHC_MEM = "Memory",
+      PHC_EXF = "Executive Function",
+      PHC_LAN = "Language",
+      PHC_VSP = "Visual Spatial Function",
+      PHC_AB42 = "AB42",
+      PHC_Tau = "Tau",
+      PHC_pTau = "pTau",
+      cort_thk_volwt = "Cortical Thickness",
+      gm_vol = "Gray Matter Volume"
+    ),
+    Model = recode(model_label,
+      TL_only = "TL",
+      DNAm_only = "CausAge",
+      mtDNAcn_only = "mtDNAcn",
+      Joint = "Joint",
+      TL_x_DNAm = "DNAm x TL",
+      TL_x_mtDNA = "mtDNAcn x TL",
+      DNAm_x_mtDNA = "mtDNAcn x DNAm",
+      Three_way = "mtDNAcn x DNAm x TL"
+    ),
+    # if sens_supp already has sig you can use it, but safe to recompute:
+    sig2 = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01  ~ "**",
+      p.value < 0.05  ~ "*",
+      TRUE ~ ""
+    ),
+    P = paste0(formatC(p.value, format = "e", digits = 2), " ", sig2)
+  ) %>%
+  select(domain, outcome, analysis, term, Model,
+         Estimate = estimate, SE = std.error, P)
+
+make_wide <- function(df, model_order) {
+  df <- df %>% mutate(term = recode(term, !!!term_keep))
+
+  wide <- df %>%
+    select(term, Model, Estimate, SE, P) %>%
+    mutate(Model = factor(Model, levels = model_order)) %>%
+    pivot_wider(
+      names_from = Model,
+      values_from = c(Estimate, SE, P),
+      names_glue = "{Model}_{.value}"
+    )
+
+  ordered_cols <- c(
+    "term",
+    unlist(lapply(model_order, function(m) {
+      c(paste0(m, "_Estimate"), paste0(m, "_SE"), paste0(m, "_P"))
+    }))
+  )
+  wide %>% select(any_of(ordered_cols))
+}
+
+write_with_merged_headers <- function(wb, sheet_name, df, model_order) {
+
+  writeData(wb, sheet_name, df, startRow = 3, colNames = FALSE)
+
+  header_top <- c("Term")
+  header_second <- c("")
+
+  for (m in model_order) {
+    header_top <- c(header_top, m, rep("", 2))
+    header_second <- c(header_second, "Estimate", "SE", "P")
+  }
+
+  writeData(wb, sheet_name, t(as.data.frame(header_top)), startRow = 1, colNames = FALSE)
+  writeData(wb, sheet_name, t(as.data.frame(header_second)), startRow = 2, colNames = FALSE)
+
+  start_col <- 2
+  for (i in seq_along(model_order)) {
+    mergeCells(wb, sheet = sheet_name, cols = start_col:(start_col+2), rows = 1)
+    start_col <- start_col + 3
+  }
+
+  header_style <- createStyle(textDecoration = "bold", halign = "center")
+  addStyle(wb, sheet_name, header_style,
+           rows = 1:2, cols = 1:(1 + length(model_order)*3),
+           gridExpand = TRUE)
+
+
+  bold_style <- createStyle(textDecoration = "bold")
+
+  data_start_row <- 3
+  data_end_row <- data_start_row + nrow(df) - 1
+
+  # Identify Estimate columns
+  estimate_cols <- seq(2, by = 3, length.out = length(model_order))
+
+  for (i in seq_len(nrow(df))) {
+
+    term_label <- df$term[i]
+
+    if (term_label %in% marker_terms) {
+
+      row_excel <- data_start_row + i - 1
+
+      for (j in seq_along(estimate_cols)) {
+
+        p_col <- estimate_cols[j] + 2  # P column is 2 columns after Estimate
+        est_col <- estimate_cols[j]
+
+        p_value_string <- df[i, p_col]
+
+        if (!is.na(p_value_string) && grepl("\\*", p_value_string)) {
+          addStyle(wb, sheet_name,
+                   bold_style,
+                   rows = row_excel,
+                   cols = est_col,
+                   gridExpand = FALSE)
+        }
+      }
+    }
+  }
+}
+
+make_one_outcome_sheet <- function(table_sens, outcome_name, baseline_terms, long_terms, model_order) {
+
+  df_out <- table_sens %>% filter(outcome == outcome_name)
+
+  base_block <- df_out %>%
+    filter(analysis == "Baseline", term %in% baseline_terms) %>%
+    mutate(term = factor(term, levels = baseline_terms)) %>%
+    arrange(term) %>%
+    make_wide(model_order)
+
+  long_block <- df_out %>%
+    filter(analysis == "Longitudinal", term %in% long_terms) %>%
+    mutate(term = factor(term, levels = long_terms)) %>%
+    arrange(term) %>%
+    make_wide(model_order)
+
+  bind_rows(
+    tibble(term = "Baseline"),
+    base_block,
+    tibble(term = "Longitudinal"),
+    long_block
+  )
+}
+
+make_domain_multi_outcome_sheet <- function(table_sens, domain_name, outcomes_in_order, model_order) {
+  df_domain <- table_sens %>% filter(domain == domain_name)
+
+  bind_rows(lapply(outcomes_in_order, function(oo) {
+    block <- df_domain %>%
+      filter(outcome == oo) %>%
+      make_wide(model_order)
+
+    bind_rows(tibble(term = oo), block)
+  }))
+}
+
+
+wb <- createWorkbook()
+
+cog_outcomes <- c("Global Cognition","Memory","Executive Function","Language","Visual Spatial Function")
+for (oo in cog_outcomes) {
+  addWorksheet(wb, oo)
+  sheet_df <- make_one_outcome_sheet(table_sens, oo, baseline_terms, long_terms, model_order)
+  write_with_merged_headers(wb, oo, sheet_df, model_order)
+}
+
+addWorksheet(wb, "CSF")
+csf_sheet <- make_domain_multi_outcome_sheet(table_sens, "CSF", c("AB42","Tau","pTau"), model_order)
+write_with_merged_headers(wb, "CSF", csf_sheet, model_order)
+
+addWorksheet(wb, "MRI")
+mri_sheet <- make_domain_multi_outcome_sheet(table_sens, "MRI", c("Cortical Thickness","Gray Matter Volume"), model_order)
+write_with_merged_headers(wb, "MRI", mri_sheet, model_order)
+
+saveWorkbook(wb, file = paste0("results/SupplementaryTables_", DATE, ".xlsx"), overwrite = TRUE)
+setdiff(sort(unique(sens_supp$term)), sort(names(term_keep)))
+setdiff(sort(names(term_keep)), sort(unique(sens_supp$term)))
+names(adni)
+```
+
+#Power Calculations
+
+```{r}
+library(lme4)
+library(simr)
+
+adni$sex <- factor(adni$sex)
+
+#all data mixed model 
+fit <- lmer(
+  gbl_cog ~ z_tl_bl * z_mtcn_bl * yrs_c +
+    z_age_bl + sex + cdrsb_bl + apoe_e4 +
+    (1 + yrs_c | RID),
+  data = adni,
+  REML = FALSE
+)
+
+
+fit_sim <- fit
+fixef(fit_sim)["z_tl_bl:yrs_c"] <- 0.05
+
+# sex-stratified models
+fit_m <- lmer(
+  gbl_cog ~ z_tl_bl * z_mtcn_bl * yrs_c +
+    z_age_bl + cdrsb_bl + apoe_e4 +
+    (1 + yrs_c | RID),
+  data = subset(adni, sex == "Male"),
+  REML = FALSE
+)
+
+fit_f <- lmer(
+  gbl_cog ~ z_tl_bl * z_mtcn_bl * yrs_c +
+    z_age_bl + cdrsb_bl + apoe_e4 +
+    (1 + yrs_c | RID),
+  data = subset(adni, sex == "Female"),
+  REML = FALSE
+)
+
+# assumed effect size in each stratified model
+fixef(fit_m)["z_tl_bl:yrs_c"] <- 0.05
+fixef(fit_f)["z_tl_bl:yrs_c"] <- 0.05
+
+set.seed(101)
+powerSim(fit_m, fixed("z_tl_bl:yrs_c", "t"), nsim = 200)
+
+set.seed(102)
+powerSim(fit_f, fixed("z_tl_bl:yrs_c", "t"), nsim = 200)
+
+fit_full <- fit
+fixef(fit_full)["z_tl_bl:yrs_c"] <- 0.05
+
+set.seed(200)
+powerSim(fit_full, fixed("z_tl_bl:yrs_c", "t"), nsim = 200)
+```
+
+```{r}
+library(dplyr)
+
+adni %>%
+  summarise(
+    n_participants_total = n_distinct(RID),
+    n_rows_total = n()
+  )
+
+adni %>%
+  filter(!is.na(bmi), !is.na(htn)) %>%
+  summarise(
+    n_participants_included = n_distinct(RID),
+    n_rows_included = n()
+  )
+adni %>%
+  group_by(RID) %>%
+  summarise(
+    has_bmi = any(!is.na(bmi)),
+    has_htn = any(!is.na(htn)),
+    .groups = "drop"
+  ) %>%
+  summarise(
+    participants_total = n(),
+    participants_missing_bmi = sum(!has_bmi),
+    participants_missing_htn = sum(!has_htn),
+    participants_missing_either = sum(!(has_bmi & has_htn)),
+    participants_complete_both = sum(has_bmi & has_htn)
+  )
+adni %>%
+  group_by(RID) %>%
+  summarise(
+    has_bmi = any(!is.na(bmi)),
+    has_htn = any(!is.na(htn)),
+    .groups = "drop"
+  ) %>%
+  summarise(
+    n_complete = sum(has_bmi & has_htn),
+    n_missing_either = sum(!(has_bmi & has_htn))
+  )
 
 ```
 
